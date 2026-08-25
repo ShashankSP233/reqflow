@@ -1,0 +1,1977 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.2.0
+  description: ReqFlow Procurement Workflow API
+servers:
+  - url: /api
+tags:
+  - name: health
+  - name: auth
+  - name: companies
+  - name: projects
+  - name: sites
+  - name: users
+  - name: requisitions
+  - name: items
+  - name: attachments
+  - name: workflow
+  - name: queries
+  - name: status-updates
+  - name: analytics
+  - name: assets
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                required: [status]
+
+  # ── Auth ─────────────────────────────────────────────────────────────────────
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, password]
+              properties:
+                name:
+                  type: string
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionUser"
+        "401":
+          description: Invalid name or password
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      responses:
+        "204":
+          description: Logged out
+
+  /auth/me:
+    get:
+      operationId: getCurrentUser
+      tags: [auth]
+      responses:
+        "200":
+          description: Currently logged-in user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionUser"
+        "401":
+          description: Not logged in
+
+  # ── Companies ───────────────────────────────────────────────────────────────
+  /companies:
+    get:
+      operationId: listCompanies
+      tags: [companies]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Company"
+    post:
+      operationId: createCompany
+      tags: [companies]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompanyInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Company"
+
+  # ── Projects ────────────────────────────────────────────────────────────────
+  /projects:
+    get:
+      operationId: listProjects
+      tags: [projects]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Project"
+    post:
+      operationId: createProject
+      tags: [projects]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+
+  # ── Sites ───────────────────────────────────────────────────────────────────
+  /sites:
+    get:
+      operationId: listSites
+      tags: [sites]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Site"
+    post:
+      operationId: createSite
+      tags: [sites]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SiteInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Site"
+
+  # ── Users ───────────────────────────────────────────────────────────────────
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      parameters:
+        - name: role
+          in: query
+          schema:
+            type: string
+        - name: project_id
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+    post:
+      operationId: createUser
+      tags: [users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/{id}:
+    patch:
+      operationId: updateUser
+      tags: [users]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    delete:
+      operationId: deleteUser
+      tags: [users]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ── Requisitions ─────────────────────────────────────────────────────────────
+  /requisitions:
+    get:
+      operationId: listRequisitions
+      tags: [requisitions]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: priority
+          in: query
+          schema:
+            type: string
+        - name: raised_by_id
+          in: query
+          schema:
+            type: integer
+        - name: assigned_to_id
+          in: query
+          schema:
+            type: integer
+        - name: checker1_id
+          in: query
+          schema:
+            type: integer
+        - name: checker2_id
+          in: query
+          schema:
+            type: integer
+        - name: approver_id
+          in: query
+          schema:
+            type: integer
+        - name: checker_id
+          in: query
+          schema:
+            type: integer
+        - name: project_id
+          in: query
+          schema:
+            type: integer
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Matches ref number, requester, purpose, site, item names, or vessel/equipment/location names.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Requisition"
+    post:
+      operationId: createRequisition
+      tags: [requisitions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequisitionInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Requisition"
+
+  /requisitions/{id}:
+    get:
+      operationId: getRequisition
+      tags: [requisitions]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequisitionDetail"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateRequisition
+      tags: [requisitions]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequisitionUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Requisition"
+    delete:
+      operationId: deleteRequisition
+      tags: [requisitions]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /requisitions/{id}/items:
+    get:
+      operationId: listRequisitionItems
+      tags: [items]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RequisitionItem"
+    post:
+      operationId: addRequisitionItem
+      tags: [items]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequisitionItemInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequisitionItem"
+
+  /requisitions/{id}/items/{itemId}:
+    patch:
+      operationId: updateRequisitionItem
+      tags: [items]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequisitionItemInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequisitionItem"
+    delete:
+      operationId: deleteRequisitionItem
+      tags: [items]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /requisitions/{id}/attachments:
+    get:
+      operationId: listAttachments
+      tags: [attachments]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Attachment"
+
+  /requisitions/{id}/submit:
+    post:
+      operationId: submitRequisition
+      tags: [workflow]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Requisition"
+
+  /requisitions/{id}/checker1-review:
+    post:
+      operationId: checker1Review
+      tags: [workflow]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckerReviewInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Requisition"
+
+  /requisitions/{id}/checker2-review:
+    post:
+      operationId: checker2Review
+      tags: [workflow]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckerReviewInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Requisition"
+
+  /requisitions/{id}/approve:
+    post:
+      operationId: approveRequisition
+      tags: [workflow]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApproverActionInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Requisition"
+
+  /requisitions/{id}/reject:
+    post:
+      operationId: rejectRequisition
+      tags: [workflow]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApproverActionInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Requisition"
+
+  /requisitions/{id}/assign:
+    post:
+      operationId: assignRequisition
+      tags: [workflow]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Requisition"
+
+  /requisitions/{id}/hold:
+    post:
+      operationId: holdRequisition
+      tags: [workflow]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HoldInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Requisition"
+
+  /requisitions/{id}/resume:
+    post:
+      operationId: resumeRequisition
+      tags: [workflow]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Requisition"
+
+  /requisitions/{id}/complete:
+    post:
+      operationId: completeRequisition
+      tags: [workflow]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Requisition"
+        "400":
+          description: No approval note linked yet
+
+  /requisitions/{id}/approval-notes:
+    get:
+      operationId: listApprovalNotes
+      tags: [workflow]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ApprovalNote"
+    post:
+      operationId: addApprovalNote
+      tags: [workflow]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApprovalNoteInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApprovalNote"
+
+  /requisitions/{id}/approval-notes/{noteId}:
+    delete:
+      operationId: deleteApprovalNote
+      tags: [workflow]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: noteId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /attachments/{id}:
+    delete:
+      operationId: deleteAttachment
+      tags: [attachments]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ── Queries ──────────────────────────────────────────────────────────────────
+  /requisitions/{id}/queries:
+    get:
+      operationId: listQueries
+      tags: [queries]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/QueryWithReplies"
+    post:
+      operationId: raiseQuery
+      tags: [queries]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QueryInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueryWithReplies"
+
+  /queries/{queryId}/reply:
+    post:
+      operationId: replyToQuery
+      tags: [queries]
+      parameters:
+        - name: queryId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QueryReplyInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueryReplyObject"
+
+  /queries/{queryId}/resolve:
+    post:
+      operationId: resolveQuery
+      tags: [queries]
+      parameters:
+        - name: queryId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResolveQueryInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueryWithReplies"
+
+  # ── Status Updates ───────────────────────────────────────────────────────────
+  /requisitions/{id}/status-updates:
+    get:
+      operationId: listStatusUpdates
+      tags: [status-updates]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StatusUpdate"
+    post:
+      operationId: addStatusUpdate
+      tags: [status-updates]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StatusUpdateInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusUpdate"
+
+  # ── Analytics ────────────────────────────────────────────────────────────────
+  /analytics/summary:
+    get:
+      operationId: getAnalyticsSummary
+      tags: [analytics]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsSummary"
+
+  /analytics/resolution-times:
+    get:
+      operationId: getResolutionTimes
+      tags: [analytics]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ResolutionTimeItem"
+
+  /analytics/urgent:
+    get:
+      operationId: getUrgentAnalytics
+      tags: [analytics]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UrgentItem"
+
+  /analytics/by-status:
+    get:
+      operationId: getAnalyticsByStatus
+      tags: [analytics]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StatusCount"
+
+  /analytics/by-site:
+    get:
+      operationId: getAnalyticsBySite
+      tags: [analytics]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SiteStats"
+
+  /analytics/by-project:
+    get:
+      operationId: getAnalyticsByProject
+      tags: [analytics]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProjectStats"
+
+  /analytics/on-hold:
+    get:
+      operationId: getOnHoldRequisitions
+      tags: [analytics]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OnHoldItem"
+
+  /analytics/status-updates:
+    get:
+      operationId: getStatusUpdateAnalytics
+      tags: [analytics]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusUpdateAnalytics"
+
+  /analytics/purchase-member-performance:
+    get:
+      operationId: getPurchaseMemberPerformance
+      tags: [analytics]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PurchaseMemberPerformance"
+
+  /analytics/overdue-updates:
+    get:
+      operationId: getOverdueStatusUpdates
+      tags: [analytics]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OverdueStatusUpdate"
+
+  /item-names:
+    get:
+      operationId: listItemNames
+      tags: [items]
+      description: Distinct item names already used across past requisitions, for autocomplete on the create form.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+
+  /holidays:
+    get:
+      operationId: listHolidays
+      tags: [holidays]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Holiday"
+    post:
+      operationId: createHoliday
+      tags: [holidays]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HolidayInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Holiday"
+
+  /holidays/{id}:
+    delete:
+      operationId: deleteHoliday
+      tags: [holidays]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /assets:
+    get:
+      operationId: listAssets
+      tags: [assets]
+      parameters:
+        - name: project_id
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Asset"
+    post:
+      operationId: createAsset
+      tags: [assets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssetInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Asset"
+
+  /assets/{id}:
+    patch:
+      operationId: updateAsset
+      tags: [assets]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssetInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Asset"
+    delete:
+      operationId: deleteAsset
+      tags: [assets]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+components:
+  schemas:
+    Company:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        address:
+          type: ["string", "null"]
+
+    CompanyInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        address:
+          type: string
+
+    Project:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        code:
+          type: ["string", "null"]
+        company_id:
+          type: ["integer", "null"]
+        company_name:
+          type: ["string", "null"]
+
+    ProjectInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        code:
+          type: string
+        company_id:
+          type: ["integer", "null"]
+
+    Site:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        location:
+          type: ["string", "null"]
+        company_id:
+          type: ["integer", "null"]
+        company_name:
+          type: ["string", "null"]
+
+    SiteInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        location:
+          type: string
+        company_id:
+          type: ["integer", "null"]
+
+    SessionUser:
+      type: object
+      required: [id, name, role]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        role:
+          type: string
+        site_name:
+          type: ["string", "null"]
+
+    User:
+      type: object
+      required: [id, name, role, has_password]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: ["string", "null"]
+        role:
+          type: string
+        site_name:
+          type: ["string", "null"]
+        has_password:
+          type: boolean
+          description: Whether this person can log in yet.
+        project_ids:
+          type: array
+          items:
+            type: integer
+          description: Projects this person is assigned to. Determines what data they can see (point 8).
+
+    UserInput:
+      type: object
+      required: [name, role]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+        site_name:
+          type: string
+        password:
+          type: string
+          description: Optional. Omit to leave login disabled for this person (or unchanged, on update).
+        project_ids:
+          type: array
+          items:
+            type: integer
+          description: Replaces this person's full set of project assignments. Omit to leave unchanged.
+
+    Requisition:
+      type: object
+      required: [id, ref_number, raised_by_name, requisition_date, status, priority, created_at, updated_at]
+      properties:
+        id:
+          type: integer
+        ref_number:
+          type: string
+        project_id:
+          type: ["integer", "null"]
+        project_name:
+          type: ["string", "null"]
+        site_id:
+          type: ["integer", "null"]
+        site_name:
+          type: ["string", "null"]
+        raised_by_id:
+          type: ["integer", "null"]
+        raised_by_name:
+          type: string
+        requisition_date:
+          type: string
+        priority:
+          type: string
+        purpose:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        status:
+          type: string
+        checker1_id:
+          type: ["integer", "null"]
+        checker1_name:
+          type: ["string", "null"]
+        checker1_suggestion:
+          type: ["string", "null"]
+        checker1_reviewed_at:
+          type: ["string", "null"]
+        checker1_status:
+          type: ["string", "null"]
+        checker2_id:
+          type: ["integer", "null"]
+        checker2_name:
+          type: ["string", "null"]
+        checker2_suggestion:
+          type: ["string", "null"]
+        checker2_reviewed_at:
+          type: ["string", "null"]
+        checker2_status:
+          type: ["string", "null"]
+        approver_id:
+          type: ["integer", "null"]
+        approver_name:
+          type: ["string", "null"]
+        approver_suggestion:
+          type: ["string", "null"]
+        approver_reviewed_at:
+          type: ["string", "null"]
+        approver_status:
+          type: ["string", "null"]
+        hold_reason:
+          type: ["string", "null"]
+        held_at:
+          type: ["string", "null"]
+        pre_hold_status:
+          type: ["string", "null"]
+        purchase_head_id:
+          type: ["integer", "null"]
+        purchase_head_name:
+          type: ["string", "null"]
+        assigned_to_id:
+          type: ["integer", "null"]
+        assigned_to_name:
+          type: ["string", "null"]
+        assigned_at:
+          type: ["string", "null"]
+        submitted_at:
+          type: ["string", "null"]
+        approved_at:
+          type: ["string", "null"]
+        completed_at:
+          type: ["string", "null"]
+        created_at:
+          type: string
+        updated_at:
+          type: string
+        item_count:
+          type: ["integer", "null"]
+        total_expected_cost:
+          type: ["number", "null"]
+
+    RequisitionDetail:
+      allOf:
+        - $ref: "#/components/schemas/Requisition"
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/RequisitionItem"
+            attachments:
+              type: array
+              items:
+                $ref: "#/components/schemas/Attachment"
+            queries:
+              type: array
+              items:
+                $ref: "#/components/schemas/QueryWithReplies"
+            status_updates:
+              type: array
+              items:
+                $ref: "#/components/schemas/StatusUpdate"
+            compliance:
+              oneOf:
+                - $ref: "#/components/schemas/ComplianceStatus"
+                - type: "null"
+
+    ComplianceStatus:
+      type: object
+      required: [last_activity_date, business_days_overdue, due_today]
+      properties:
+        last_activity_date:
+          type: string
+        business_days_overdue:
+          type: integer
+        due_today:
+          type: boolean
+
+    RequisitionInput:
+      type: object
+      required: [project_id, raised_by_name, requisition_date]
+      properties:
+        project_id:
+          type: integer
+        site_id:
+          type: ["integer", "null"]
+        raised_by_id:
+          type: ["integer", "null"]
+        raised_by_name:
+          type: string
+        site_name:
+          type: string
+        requisition_date:
+          type: string
+        priority:
+          type: string
+        purpose:
+          type: string
+        notes:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RequisitionItemInput"
+
+    RequisitionUpdate:
+      type: object
+      properties:
+        project_id:
+          type: ["integer", "null"]
+        site_id:
+          type: ["integer", "null"]
+        raised_by_name:
+          type: string
+        site_name:
+          type: string
+        requisition_date:
+          type: string
+        priority:
+          type: string
+        purpose:
+          type: string
+        notes:
+          type: string
+
+    RequisitionItem:
+      type: object
+      required: [id, requisition_id, item_name, quantity]
+      properties:
+        id:
+          type: integer
+        requisition_id:
+          type: integer
+        item_name:
+          type: string
+        quantity:
+          type: number
+        unit:
+          type: ["string", "null"]
+        reference_no:
+          type: ["string", "null"]
+        expected_cost:
+          type: ["number", "null"]
+        description:
+          type: ["string", "null"]
+        remark:
+          type: ["string", "null"]
+        asset_id:
+          type: ["integer", "null"]
+        asset_name:
+          type: ["string", "null"]
+        sort_order:
+          type: integer
+
+    RequisitionItemInput:
+      type: object
+      required: [item_name, quantity]
+      properties:
+        item_name:
+          type: string
+        quantity:
+          type: number
+        unit:
+          type: string
+        reference_no:
+          type: string
+        expected_cost:
+          type: ["number", "null"]
+        description:
+          type: string
+        remark:
+          type: string
+        asset_id:
+          type: ["integer", "null"]
+        asset_name:
+          type: string
+        sort_order:
+          type: integer
+
+    Attachment:
+      type: object
+      required: [id, requisition_id, filename, original_name]
+      properties:
+        id:
+          type: integer
+        requisition_id:
+          type: integer
+        context:
+          type: string
+        context_id:
+          type: ["integer", "null"]
+        filename:
+          type: string
+        original_name:
+          type: string
+        mime_type:
+          type: ["string", "null"]
+        size_bytes:
+          type: ["integer", "null"]
+        uploaded_by_name:
+          type: ["string", "null"]
+        uploaded_at:
+          type: string
+        url:
+          type: string
+
+    SubmitInput:
+      type: object
+      required: [checker1_id, checker1_name, checker2_id, checker2_name, approver_id, approver_name]
+      properties:
+        checker1_id:
+          type: integer
+        checker1_name:
+          type: string
+        checker2_id:
+          type: integer
+        checker2_name:
+          type: string
+        approver_id:
+          type: integer
+        approver_name:
+          type: string
+
+    CheckerReviewInput:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+        suggestion:
+          type: string
+        checker_name:
+          type: string
+
+    ApproverActionInput:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+        suggestion:
+          type: string
+        approver_name:
+          type: string
+
+    AssignInput:
+      type: object
+      required: [assigned_to_id, assigned_to_name]
+      properties:
+        assigned_to_id:
+          type: integer
+        assigned_to_name:
+          type: string
+
+    Asset:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        type:
+          type: ["string", "null"]
+          description: A free-form label like "vessel", "equipment", or "location".
+        project_id:
+          type: ["integer", "null"]
+          description: Null means available on every project.
+
+    AssetInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        project_id:
+          type: ["integer", "null"]
+
+    ApprovalNote:
+      type: object
+      required: [id, requisition_id, note_number, created_at]
+      properties:
+        id:
+          type: integer
+        requisition_id:
+          type: integer
+        note_number:
+          type: string
+        created_by_name:
+          type: ["string", "null"]
+        created_at:
+          type: string
+
+    ApprovalNoteInput:
+      type: object
+      required: [note_number]
+      properties:
+        note_number:
+          type: string
+
+    HoldInput:
+      type: object
+      properties:
+        reason:
+          type: string
+
+    QueryWithReplies:
+      type: object
+      required: [id, requisition_id, raised_by_name, message, is_resolved, created_at]
+      properties:
+        id:
+          type: integer
+        requisition_id:
+          type: integer
+        raised_by_name:
+          type: string
+        raised_by_role:
+          type: ["string", "null"]
+        message:
+          type: string
+        is_resolved:
+          type: boolean
+        resolved_by_name:
+          type: ["string", "null"]
+        resolved_at:
+          type: ["string", "null"]
+        created_at:
+          type: string
+        replies:
+          type: array
+          items:
+            $ref: "#/components/schemas/QueryReplyObject"
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Attachment"
+
+    QueryReplyObject:
+      type: object
+      required: [id, query_id, replied_by_name, message, created_at]
+      properties:
+        id:
+          type: integer
+        query_id:
+          type: integer
+        replied_by_name:
+          type: string
+        replied_by_role:
+          type: ["string", "null"]
+        message:
+          type: string
+        created_at:
+          type: string
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Attachment"
+
+    QueryInput:
+      type: object
+      required: [raised_by_name, message]
+      properties:
+        raised_by_name:
+          type: string
+        raised_by_role:
+          type: string
+        message:
+          type: string
+
+    QueryReplyInput:
+      type: object
+      required: [replied_by_name, message]
+      properties:
+        replied_by_name:
+          type: string
+        replied_by_role:
+          type: string
+        message:
+          type: string
+
+    ResolveQueryInput:
+      type: object
+      required: [resolved_by_name]
+      properties:
+        resolved_by_name:
+          type: string
+
+    StatusUpdate:
+      type: object
+      required: [id, requisition_id, updated_by_name, stage, update_date, created_at]
+      properties:
+        id:
+          type: integer
+        requisition_id:
+          type: integer
+        updated_by_name:
+          type: string
+        stage:
+          type: string
+        notes:
+          type: ["string", "null"]
+        update_date:
+          type: string
+        created_at:
+          type: string
+
+    StatusUpdateInput:
+      type: object
+      required: [updated_by_name, stage, update_date]
+      properties:
+        updated_by_name:
+          type: string
+        stage:
+          type: string
+        notes:
+          type: string
+        update_date:
+          type: string
+
+    AnalyticsSummary:
+      type: object
+      required: [total, draft, pending, approved, rejected, in_progress, completed, urgent_count, avg_resolution_days]
+      properties:
+        total:
+          type: integer
+        draft:
+          type: integer
+        pending:
+          type: integer
+        approved:
+          type: integer
+        rejected:
+          type: integer
+        in_progress:
+          type: integer
+        completed:
+          type: integer
+        urgent_count:
+          type: integer
+        avg_resolution_days:
+          type: number
+        total_expected_value:
+          type: number
+
+    ResolutionTimeItem:
+      type: object
+      required: [id, ref_number, raised_by_name, status, created_at]
+      properties:
+        id:
+          type: integer
+        ref_number:
+          type: string
+        raised_by_name:
+          type: string
+        priority:
+          type: string
+        status:
+          type: string
+        created_at:
+          type: string
+        approved_at:
+          type: ["string", "null"]
+        completed_at:
+          type: ["string", "null"]
+        resolution_days:
+          type: ["number", "null"]
+        site_name:
+          type: ["string", "null"]
+
+    UrgentItem:
+      type: object
+      required: [id, ref_number, raised_by_name, status, created_at]
+      properties:
+        id:
+          type: integer
+        ref_number:
+          type: string
+        raised_by_name:
+          type: string
+        assigned_to_name:
+          type: ["string", "null"]
+        status:
+          type: string
+        created_at:
+          type: string
+        approved_at:
+          type: ["string", "null"]
+        resolution_days:
+          type: ["number", "null"]
+        site_name:
+          type: ["string", "null"]
+
+    StatusCount:
+      type: object
+      required: [status, count]
+      properties:
+        status:
+          type: string
+        count:
+          type: integer
+
+    SiteStats:
+      type: object
+      required: [site_name, count, total_expected]
+      properties:
+        site_name:
+          type: string
+        count:
+          type: integer
+        total_expected:
+          type: number
+
+    ProjectStats:
+      type: object
+      required: [project_name, count]
+      properties:
+        project_id:
+          type: ["integer", "null"]
+        project_name:
+          type: string
+        count:
+          type: integer
+
+    OnHoldItem:
+      type: object
+      required: [id, ref_number]
+      properties:
+        id:
+          type: integer
+        ref_number:
+          type: string
+        raised_by_name:
+          type: ["string", "null"]
+        site_name:
+          type: ["string", "null"]
+        hold_reason:
+          type: ["string", "null"]
+        held_at:
+          type: ["string", "null"]
+
+    StatusUpdateByStage:
+      type: object
+      required: [stage, avg_days, requisition_count]
+      properties:
+        stage:
+          type: string
+        avg_days:
+          type: number
+          description: Average days from assignment to first reaching this stage.
+        requisition_count:
+          type: integer
+
+    StatusUpdateAnalytics:
+      type: object
+      required: [by_stage]
+      properties:
+        by_stage:
+          type: array
+          items:
+            $ref: "#/components/schemas/StatusUpdateByStage"
+
+    PurchaseMemberPerformance:
+      type: object
+      required: [assigned_to_name, total_completed, low, medium, high, urgent, avg_completion_days]
+      properties:
+        assigned_to_name:
+          type: string
+        total_completed:
+          type: integer
+        low:
+          type: integer
+        medium:
+          type: integer
+        high:
+          type: integer
+        urgent:
+          type: integer
+        avg_completion_days:
+          type: number
+          description: Average days from assignment to completion.
+
+    Holiday:
+      type: object
+      required: [id, date, name]
+      properties:
+        id:
+          type: integer
+        date:
+          type: string
+        name:
+          type: string
+
+    HolidayInput:
+      type: object
+      required: [date, name]
+      properties:
+        date:
+          type: string
+        name:
+          type: string
+
+    OverdueStatusUpdate:
+      type: object
+      required: [id, ref_number, business_days_overdue, due_today]
+      properties:
+        id:
+          type: integer
+        ref_number:
+          type: string
+        site_name:
+          type: ["string", "null"]
+        assigned_to_name:
+          type: ["string", "null"]
+        last_update_date:
+          type: ["string", "null"]
+        business_days_overdue:
+          type: integer
+        due_today:
+          type: boolean
