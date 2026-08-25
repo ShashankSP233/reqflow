@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect,useState } from "react";
 import { useLocation } from "wouter";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -23,6 +23,9 @@ import { ArrowLeft, Plus, Trash2, IndianRupee, Paperclip, X, FileText } from "lu
 import { Link } from "wouter";
 import { useRole } from "@/context/RoleContext";
 import { formatINR } from "@/lib/format";
+
+
+const DRAFT_KEY = "reqflow:create-requisition-draft";
 
 const itemSchema = z.object({
   item_name: z.string().min(1, "Item name is required"),
@@ -78,11 +81,37 @@ export default function CreateRequisition() {
   });
 
   const { fields, append, remove } = useFieldArray({ control: form.control, name: "items" });
+  
+  useEffect(() => {
+    const savedDraft = localStorage.getItem(DRAFT_KEY);
+
+    if (!savedDraft) return;
+
+    try {
+      const draft = JSON.parse(savedDraft);
+      form.reset(draft);
+    } catch (error) {
+      console.error("Failed to restore requisition draft:", error);
+      localStorage.removeItem(DRAFT_KEY);
+    }
+  }, [form]);
+  
   const selectedProjectId = form.watch("project_id");
   const { data: assets } = useListAssets(selectedProjectId ? { project_id: selectedProjectId } : undefined);
 
   const watchItems = form.watch("items");
   const totalEstimate = watchItems.reduce((sum, item) => sum + (Number(item.expected_cost) || 0) * (Number(item.quantity) || 1), 0);
+
+  function saveDraft() {
+    const values = form.getValues();
+
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(values));
+
+    toast({
+      title: "Draft saved",
+      description: "Your requisition draft has been saved.",
+    });
+  }
 
   function onSubmit(values: FormValues) {
     createRequisition.mutate(
@@ -445,6 +474,14 @@ export default function CreateRequisition() {
 
           <div className="flex items-center justify-between pt-2">
             <Link href="/requisitions" className="text-sm text-muted-foreground hover:text-foreground">Cancel</Link>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={saveDraft}
+              data-testid="button-save-draft"
+            >
+              Save as Draft
+            </Button>
             <Button type="submit" disabled={createRequisition.isPending} className="min-w-[160px]" data-testid="button-submit-requisition">
               {createRequisition.isPending ? "Creating..." : "Create Requisition"}
             </Button>

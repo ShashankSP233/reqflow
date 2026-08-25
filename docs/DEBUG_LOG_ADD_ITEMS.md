@@ -3,7 +3,7 @@
 
 **Date:** 25 August 2026  
 **Status:** COMPLETE and tested locally
-
+**Developer:** Shashank Singh Parihar
 ---
 
 ## 1. Original Requirement
