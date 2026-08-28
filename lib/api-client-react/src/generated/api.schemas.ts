@@ -86,6 +86,15 @@ export interface UserInput {
   project_ids?: number[];
 }
 
+export interface UserUpdateInput {
+  name?: string;
+  email?: string;
+  role?: string;
+  site_name?: string;
+  password?: string;
+  project_ids?: number[];
+}
+
 export interface Requisition {
   id: number;
   ref_number: string;
@@ -271,7 +280,8 @@ export interface RequisitionItemInput {
   remark?: string;
   /** @nullable */
   asset_id?: number | null;
-  asset_name?: string;
+  /** @nullable */
+  asset_name?: string | null;
   sort_order?: number;
 }
 
@@ -388,13 +398,14 @@ export interface StatusUpdateInput {
   updated_by_name: string;
   stage: string;
   notes?: string;
-  update_date: string;
+  update_date?: string;
 }
 
 export interface AnalyticsSummary {
   total: number;
   draft: number;
   pending: number;
+  on_hold: number;
   approved: number;
   rejected: number;
   in_progress: number;

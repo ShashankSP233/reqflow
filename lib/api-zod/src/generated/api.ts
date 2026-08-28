@@ -152,12 +152,12 @@ export const UpdateUserParams = zod.object({
 })
 
 export const UpdateUserBody = zod.object({
-  "name": zod.string(),
+  "name": zod.string().optional(),
   "email": zod.string().optional(),
-  "role": zod.string(),
+  "role": zod.string().optional(),
   "site_name": zod.string().optional(),
-  "password": zod.string().optional().describe('Optional. Omit to leave login disabled for this person (or unchanged, on update).'),
-  "project_ids": zod.array(zod.int()).optional().describe('Replaces this person\'s full set of project assignments. Omit to leave unchanged.')
+  "password": zod.string().optional(),
+  "project_ids": zod.array(zod.int()).optional()
 })
 
 export const UpdateUserResponse = zod.object({
@@ -258,7 +258,7 @@ export const CreateRequisitionBody = zod.object({
   "description": zod.string().optional(),
   "remark": zod.string().optional(),
   "asset_id": zod.int().nullish(),
-  "asset_name": zod.string().optional(),
+  "asset_name": zod.string().nullish(),
   "sort_order": zod.int().optional()
 })).optional()
 })
@@ -551,7 +551,7 @@ export const AddRequisitionItemBody = zod.object({
   "description": zod.string().optional(),
   "remark": zod.string().optional(),
   "asset_id": zod.int().nullish(),
-  "asset_name": zod.string().optional(),
+  "asset_name": zod.string().nullish(),
   "sort_order": zod.int().optional()
 })
 
@@ -585,7 +585,7 @@ export const UpdateRequisitionItemBody = zod.object({
   "description": zod.string().optional(),
   "remark": zod.string().optional(),
   "asset_id": zod.int().nullish(),
-  "asset_name": zod.string().optional(),
+  "asset_name": zod.string().nullish(),
   "sort_order": zod.int().optional()
 })
 
@@ -1401,7 +1401,7 @@ export const AddStatusUpdateBody = zod.object({
   "updated_by_name": zod.string(),
   "stage": zod.string(),
   "notes": zod.string().optional(),
-  "update_date": zod.string()
+  "update_date": zod.string().optional()
 })
 
 export const AddStatusUpdateResponse = zod.object({
@@ -1419,6 +1419,7 @@ export const GetAnalyticsSummaryResponse = zod.object({
   "total": zod.int(),
   "draft": zod.int(),
   "pending": zod.int(),
+  "on_hold": zod.int(),
   "approved": zod.int(),
   "rejected": zod.int(),
   "in_progress": zod.int(),

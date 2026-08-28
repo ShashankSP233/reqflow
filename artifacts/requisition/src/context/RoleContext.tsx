@@ -70,5 +70,5 @@ export const ROLE_LABELS: Record<Role, string> = {
   approver: "Approver",
   purchase_head: "Purchase Head",
   purchase_member: "Purchase Member",
-  director: "Director",
+  // director: "Director",    #removed due to being legacy
 };

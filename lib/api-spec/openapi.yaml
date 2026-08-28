@@ -236,7 +236,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UserInput"
+              $ref: "#/components/schemas/UserUpdateInput"
       responses:
         "200":
           description: Updated
@@ -1303,10 +1303,38 @@ components:
           items:
             type: integer
           description: Replaces this person's full set of project assignments. Omit to leave unchanged.
+   
+    UserUpdateInput:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+        site_name:
+          type: string
+        password:
+          type: string
+        project_ids:
+          type: array
+          items:
+            type: integer
 
     Requisition:
       type: object
-      required: [id, ref_number, raised_by_name, requisition_date, status, priority, created_at, updated_at]
+      required:
+        [
+          id,
+          ref_number,
+          raised_by_name,
+          requisition_date,
+          status,
+          priority,
+          created_at,
+          updated_at,
+        ]
       properties:
         id:
           type: integer
@@ -1529,7 +1557,7 @@ components:
         asset_id:
           type: ["integer", "null"]
         asset_name:
-          type: string
+          type: ["string", "null"]
         sort_order:
           type: integer
 
@@ -1562,7 +1590,15 @@ components:
 
     SubmitInput:
       type: object
-      required: [checker1_id, checker1_name, checker2_id, checker2_name, approver_id, approver_name]
+      required:
+        [
+          checker1_id,
+          checker1_name,
+          checker2_id,
+          checker2_name,
+          approver_id,
+          approver_name,
+        ]
       properties:
         checker1_id:
           type: integer
@@ -1664,7 +1700,8 @@ components:
 
     QueryWithReplies:
       type: object
-      required: [id, requisition_id, raised_by_name, message, is_resolved, created_at]
+      required:
+        [id, requisition_id, raised_by_name, message, is_resolved, created_at]
       properties:
         id:
           type: integer
@@ -1745,7 +1782,8 @@ components:
 
     StatusUpdate:
       type: object
-      required: [id, requisition_id, updated_by_name, stage, update_date, created_at]
+      required:
+        [id, requisition_id, updated_by_name, stage, update_date, created_at]
       properties:
         id:
           type: integer
@@ -1764,7 +1802,7 @@ components:
 
     StatusUpdateInput:
       type: object
-      required: [updated_by_name, stage, update_date]
+      required: [updated_by_name, stage]
       properties:
         updated_by_name:
           type: string
@@ -1777,13 +1815,27 @@ components:
 
     AnalyticsSummary:
       type: object
-      required: [total, draft, pending, approved, rejected, in_progress, completed, urgent_count, avg_resolution_days]
+      required:
+        [
+          total,
+          draft,
+          pending,
+          on_hold,
+          approved,
+          rejected,
+          in_progress,
+          completed,
+          urgent_count,
+          avg_resolution_days,
+        ]
       properties:
         total:
           type: integer
         draft:
           type: integer
         pending:
+          type: integer
+        on_hold:
           type: integer
         approved:
           type: integer
@@ -1919,7 +1971,16 @@ components:
 
     PurchaseMemberPerformance:
       type: object
-      required: [assigned_to_name, total_completed, low, medium, high, urgent, avg_completion_days]
+      required:
+        [
+          assigned_to_name,
+          total_completed,
+          low,
+          medium,
+          high,
+          urgent,
+          avg_completion_days,
+        ]
       properties:
         assigned_to_name:
           type: string

@@ -68,7 +68,8 @@ import type {
   SubmitInput,
   UrgentItem,
   User,
-  UserInput
+  UserInput,
+  UserUpdateInput
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -935,14 +936,14 @@ export const getUpdateUserUrl = (id: number,) => {
 }
 
 export const updateUser = async (id: number,
-    userInput: UserInput, options?: Parameters<typeof customFetch>[1]): Promise<User> => {
+    userUpdateInput: UserUpdateInput, options?: Parameters<typeof customFetch>[1]): Promise<User> => {
 
   return customFetch<User>(getUpdateUserUrl(id),
   {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(userInput)
+    body: JSON.stringify(userUpdateInput)
   }
 );}
 
@@ -951,8 +952,8 @@ export const updateUser = async (id: number,
 
 
 export const getUpdateUserMutationOptions = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUser>>, TError,{id: number;data: UserInput}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof updateUser>>, TError,{id: number;data: UserInput}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUser>>, TError,{id: number;data: UserUpdateInput}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateUser>>, TError,{id: number;data: UserUpdateInput}, TContext> => {
 
 const mutationKey = ['updateUser'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -964,7 +965,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateUser>>, {id: number;data: UserInput}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateUser>>, {id: number;data: UserUpdateInput}> = (props) => {
           const {id,data} = props ?? {};
 
           return  updateUser(id,data,requestOptions)
@@ -978,15 +979,15 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type UpdateUserMutationResult = NonNullable<Awaited<ReturnType<typeof updateUser>>>
-    export type UpdateUserMutationBody = UserInput
+    export type UpdateUserMutationBody = UserUpdateInput
     export type UpdateUserMutationError = unknown
 
     export const useUpdateUser = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUser>>, TError,{id: number;data: UserInput}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUser>>, TError,{id: number;data: UserUpdateInput}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof updateUser>>,
         TError,
-        {id: number;data: UserInput},
+        {id: number;data: UserUpdateInput},
         TContext
       > => {
       return useMutation(getUpdateUserMutationOptions(options));

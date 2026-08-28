@@ -6,6 +6,7 @@ import { z } from "zod";
 import {
   useGetRequisition,
   getGetRequisitionQueryKey,
+  getListApprovalNotesQueryKey,
   useSubmitRequisition,
   useChecker1Review,
   useChecker2Review,
@@ -32,6 +33,7 @@ import {
   getGetAnalyticsSummaryQueryKey,
   ApiError,
 } from "@workspace/api-client-react";
+import type { RequisitionDetail as RequisitionDetailType } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatINR, formatDate, formatDateTime } from "@/lib/format";
 import { StatusBadge } from "@/components/requisition/StatusBadge";
@@ -86,7 +88,13 @@ export default function RequisitionDetail() {
   const [replyFile, setReplyFile] = useState<File | null>(null);
   const [uploadingFor, setUploadingFor] = useState<"requisition" | null>(null);
 
-  const { data: req, isLoading, error } = useGetRequisition(id, { query: { enabled: !!id, queryKey: getGetRequisitionQueryKey(id) } });
+  const { data: req, isLoading, error } =
+    useGetRequisition<RequisitionDetailType, ApiError>(id, {
+      query: {
+        enabled: !!id,
+        queryKey: getGetRequisitionQueryKey(id),
+      },
+    });
   const { data: allUsers } = useListUsers();
   const { data: assets } = useListAssets(req?.project_id ? { project_id: req.project_id } : undefined);
   const { data: itemNameSuggestions } = useListItemNames();
@@ -97,7 +105,12 @@ export default function RequisitionDetail() {
   const checkers = allUsers?.filter(u => u.role === "checker" && projectScoped(u)) ?? [];
   const approvers = allUsers?.filter(u => u.role === "approver" && projectScoped(u)) ?? [];
   const purchaseMembers = allUsers?.filter(u => u.role === "purchase_member") ?? [];
-  const { data: approvalNotes } = useListApprovalNotes(id, { query: { enabled: !!id } });
+  const { data: approvalNotes } = useListApprovalNotes(id, {
+      query: {
+        enabled: !!id,
+        queryKey: getListApprovalNotesQueryKey(id),
+      },
+    });
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: getGetRequisitionQueryKey(id) });
@@ -175,6 +188,9 @@ export default function RequisitionDetail() {
   const canComplete = isPurchaseHead && req.status === "in_progress";
 
   function startEdit() {
+
+    if (!req) return;
+
     setEditItems((req.items ?? []).map((item) => ({
       tempId: `existing-${item.id}`,
       id: item.id,
