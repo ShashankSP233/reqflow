@@ -194,6 +194,12 @@ export default function RequisitionDetail() {
   function updateEditItem(tempId: string, field: string, value: string) {
     setEditItems((prev) => prev.map((it) => (it.tempId === tempId ? { ...it, [field]: value } : it)));
   }
+
+  function removeUnsavedEditItem(tempId: string) {
+  setEditItems((prev) =>
+    prev.filter((it) => !(it.id === 0 && it.tempId === tempId))
+  );
+}
   function addNewEditItem() {
     setEditItems((prev) => [
       ...prev,
@@ -309,8 +315,24 @@ export default function RequisitionDetail() {
                 <div className="space-y-4 mt-2">
                   {editItems.length === 0 && <p className="text-sm text-muted-foreground">No items on this requisition.</p>}
                   {editItems.map((it, index) => (
-                    <div key={it.id} className="border rounded-lg p-3 bg-muted/20 space-y-2.5">
-                      <p className="text-xs font-semibold text-muted-foreground">Item #{index + 1}</p>
+                    <div key={it.tempId} className="border rounded-lg p-3 bg-muted/20 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold text-muted-foreground">
+                          Item #{index + 1}
+                        </p>
+
+                        {it.id === 0 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => removeUnsavedEditItem(it.tempId)}
+                          >
+                            Remove
+                          </Button>
+                        )}
+                      </div>
                       <div className="grid grid-cols-2 gap-2.5">
                         <div className="col-span-2">
                           <label className="text-xs font-medium">Item Name</label>
