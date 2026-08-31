@@ -112,7 +112,14 @@ export default function CreateRequisition() {
       description: "Your requisition draft has been saved.",
     });
   }
+  function clearDraft() {
+    localStorage.removeItem(DRAFT_KEY);
 
+    toast({
+      title: "Draft cleared",
+      description: "The saved requisition draft has been removed.",
+    });
+  }
   function onSubmit(values: FormValues) {
     createRequisition.mutate(
       {
@@ -166,6 +173,8 @@ export default function CreateRequisition() {
               : uploadFailures > 0
               ? ` ${pendingFiles.length - uploadFailures}/${pendingFiles.length} attachment(s) uploaded (${uploadFailures} failed — you can retry from the detail page).`
               : ` ${pendingFiles.length} attachment(s) uploaded.`;
+         
+          localStorage.removeItem(DRAFT_KEY);
 
           toast({
             title: "Requisition created",

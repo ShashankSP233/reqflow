@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useRole } from "@/context/RoleContext";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 
 const STATUS_OPTIONS = [
   { value: "draft", label: "Draft" },
@@ -29,8 +31,19 @@ const PRIORITY_OPTIONS = [
   { value: "urgent", label: "Urgent" },
 ];
 
+const DRAFT_KEY = "reqflow:create-requisition-draft";
+
 export default function RequisitionsList() {
+  
   const { user } = useRole();
+  const { toast } = useToast();
+  const clearDraft = () => {
+  localStorage.removeItem(DRAFT_KEY);
+    toast({
+      title: "Draft cleared",
+      description: "The saved requisition draft has been removed.",
+    });
+  };
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -63,10 +76,25 @@ export default function RequisitionsList() {
           <p className="text-muted-foreground text-sm mt-0.5">All purchase requests across sites</p>
         </div>
         {user.role === "site_user" && (
-          <Link href="/requisitions/new" className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90 transition-colors" data-testid="button-create-req">
-            <PlusCircle className="w-4 h-4" />
-            New Requisition
-          </Link>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={clearDraft}
+              data-testid="button-clear-draft"
+            >
+              Clear Draft
+            </Button>
+
+            <Link
+              href="/requisitions/new"
+              className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90 transition-colors"
+              data-testid="button-create-req"
+            >
+              <PlusCircle className="w-4 h-4" />
+              New Requisition
+            </Link>
+          </div>
         )}
       </div>
 
