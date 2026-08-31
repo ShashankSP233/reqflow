@@ -1,8 +1,5 @@
 import "dotenv/config";
 
-
-console.log("ENV CHECK:", process.env.DATABASE_URL);
-
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import * as schema from "./schema";
