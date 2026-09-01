@@ -820,8 +820,8 @@ export default function RequisitionDetail() {
                       <TableCell className="text-right">{item.quantity}</TableCell>
                       <TableCell className="text-muted-foreground">{item.unit ?? "—"}</TableCell>
                       <TableCell className="text-right font-medium">{item.expected_cost != null ? formatINR(item.expected_cost) : "—"}</TableCell>
-                      <TableCell className="text-muted-foreground text-xs max-w-[150px] truncate">{item.description ?? "—"}</TableCell>
-                      <TableCell className="text-muted-foreground text-xs">{item.remark ?? "—"}</TableCell>
+                      <TableCell className="text-muted-foreground text-xs whitespace-normal break-words">{item.description ?? "—"}</TableCell>
+                      <TableCell className="text-muted-foreground text-xs whitespace-normal break-words">{item.remark ?? "—"}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
