@@ -1,8 +1,16 @@
+import path from "path";
+import fs from "fs";
+import { createRequire } from "module";
+
+const require = createRequire(import.meta.url);
+const { ZipArchive } = require("archiver");
+
 import { Router } from "express";
 import { db } from "@workspace/db";
 import {
   requisitionsTable, requisitionItemsTable,
   projectsTable, sitesTable, attachmentsTable, queriesTable, queryRepliesTable, statusUpdatesTable,
+  approvalNotesTable,
   holidaysTable, userProjectsTable
 } from "@workspace/db";
 import { eq, and, sql, inArray, or } from "drizzle-orm";
@@ -75,6 +83,32 @@ function fmtItem(item: Record<string, unknown>) {
     quantity: Number(item.quantity),
     expected_cost: item.expected_cost != null ? Number(item.expected_cost) : null,
   };
+}
+
+function csvEscape(value: unknown): string {
+  if (value === null || value === undefined) return "";
+
+  const str = String(value);
+
+  // CSV fields containing commas, quotes, or newlines must be quoted.
+  if (/[",\r\n]/.test(str)) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+
+  return str;
+}
+
+function csvRow(values: unknown[]): string {
+  return values.map(csvEscape).join(",");
+}
+
+function csvSection(title: string, headers: string[], rows: unknown[][]): string {
+  return [
+    csvRow([title]),
+    csvRow(headers),
+    ...rows.map(csvRow),
+    "",
+  ].join("\r\n");
 }
 
 async function enrichRequisition(row: Record<string, unknown>) {
@@ -447,7 +481,381 @@ router.delete("/requisitions/:id/items/:itemId", async (req, res) => {
   res.status(204).send();
 });
 
-// ── Attachments list ──────────────────────────────────────────────────────────
+// ── Completed Requisition CSV Download ───────────────────────────────────────
+router.get("/requisitions/:id/download", async (req, res) => {
+  const user = req.currentUser;
+
+  // Only Purchase Members and Purchase Head may download completed requisitions.
+  if (!user || !["purchase_member", "purchase_head"].includes(user.role)) {
+    res.status(403).json({
+      error: "Only purchase members and purchase head can download requisitions.",
+    });
+    return;
+  }
+
+  const id = Number(req.params.id);
+
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid requisition ID." });
+    return;
+  }
+
+  // Fetch the requisition itself.
+  const rows = await db
+    .select(baseSelect)
+    .from(requisitionsTable)
+    .leftJoin(projectsTable, eq(requisitionsTable.project_id, projectsTable.id))
+    .where(eq(requisitionsTable.id, id))
+    .limit(1);
+
+  const requisition = rows[0];
+
+  if (!requisition) {
+    res.status(404).json({ error: "Requisition not found." });
+    return;
+  }
+
+  // Downloads are strictly limited to completed requisitions.
+  if (requisition.status !== "completed") {
+    res.status(403).json({
+      error: "Only completed requisitions can be downloaded.",
+    });
+    return;
+  }
+
+  // Fetch all related data.
+  const items = await db
+    .select()
+    .from(requisitionItemsTable)
+    .where(eq(requisitionItemsTable.requisition_id, id))
+    .orderBy(requisitionItemsTable.id);
+
+  const attachments = await db
+    .select()
+    .from(attachmentsTable)
+    .where(eq(attachmentsTable.requisition_id, id))
+    .orderBy(attachmentsTable.id);
+
+  const queries = await db
+    .select()
+    .from(queriesTable)
+    .where(eq(queriesTable.requisition_id, id))
+    .orderBy(queriesTable.id);
+
+  const queryReplies = queries.length > 0
+    ? await db
+        .select()
+        .from(queryRepliesTable)
+        .where(
+          inArray(
+            queryRepliesTable.query_id,
+            queries.map(q => q.id)
+          )
+        )
+        .orderBy(queryRepliesTable.id)
+    : [];
+  
+  const replyAttachments = queryReplies.length > 0
+    ? await db
+        .select()
+        .from(attachmentsTable)
+        .where(
+          and(
+            eq(attachmentsTable.context, "query_reply"),
+            inArray(
+              attachmentsTable.context_id,
+              queryReplies.map(reply => reply.id)
+            )
+          )
+        )
+        .orderBy(attachmentsTable.id)
+    : [];
+
+  const statusUpdates = await db
+    .select()
+    .from(statusUpdatesTable)
+    .where(eq(statusUpdatesTable.requisition_id, id))
+    .orderBy(statusUpdatesTable.created_at);
+
+  const approvalNotes = await db
+    .select()
+    .from(approvalNotesTable)
+    .where(eq(approvalNotesTable.requisition_id, id))
+    .orderBy(approvalNotesTable.id);
+
+  const r = requisition as Record<string, unknown>;
+
+  const sections: string[] = [];
+
+  // ── Requisition ─────────────────────────────────────────────────────────
+  sections.push(
+    csvSection(
+      "REQUISITION DETAILS",
+      ["Field", "Value"],
+      [
+        ["Reference Number", r.ref_number],
+        ["Status", r.status],
+        ["Project", r.project_name],
+        ["Site", r.site_name],
+        ["Requester", r.raised_by_name],
+        ["Requisition Date", r.requisition_date],
+        ["Priority", r.priority],
+        ["Purpose", r.purpose],
+        ["Notes", r.notes],
+        ["Submitted At", r.submitted_at],
+        ["Approved At", r.approved_at],
+        ["Completed At", r.completed_at],
+        ["Created At", r.created_at],
+        ["Updated At", r.updated_at],
+      ],
+    )
+  );
+
+  // ── Items ────────────────────────────────────────────────────────────────
+  sections.push(
+    csvSection(
+      "ITEMS",
+      [
+        "ID",
+        "Item Name",
+        "Asset / Equipment",
+        "Reference No.",
+        "Quantity",
+        "Unit",
+        "Expected Cost",
+        "Description",
+        "Remark",
+      ],
+      items.map(item => [
+        item.id,
+        item.item_name,
+        item.asset_name,
+        item.reference_no,
+        item.quantity,
+        item.unit,
+        item.expected_cost,
+        item.description,
+        item.remark,
+      ]),
+    )
+  );
+
+  // ── Workflow ─────────────────────────────────────────────────────────────
+  sections.push(
+    csvSection(
+      "WORKFLOW",
+      ["Stage", "Person", "Status", "Suggestion", "Reviewed At"],
+      [
+        [
+          "Checker 1",
+          r.checker1_name,
+          r.checker1_status,
+          r.checker1_suggestion,
+          r.checker1_reviewed_at,
+        ],
+        [
+          "Checker 2",
+          r.checker2_name,
+          r.checker2_status,
+          r.checker2_suggestion,
+          r.checker2_reviewed_at,
+        ],
+        [
+          "Approver",
+          r.approver_name,
+          r.approver_status,
+          r.approver_suggestion,
+          r.approver_reviewed_at,
+        ],
+        [
+          "Purchase Head",
+          r.purchase_head_name,
+          "",
+          "",
+          "",
+        ],
+        [
+          "Assigned Purchase Member",
+          r.assigned_to_name,
+          "",
+          "",
+          r.assigned_at,
+        ],
+      ],
+    )
+  );
+
+  // ── Status Updates ──────────────────────────────────────────────────────
+  sections.push(
+    csvSection(
+      "STATUS UPDATES",
+      ["ID", "Stage", "Updated By", "Update Date", "Created At", "Notes"],
+      statusUpdates.map(update => [
+        update.id,
+        update.stage,
+        update.updated_by_name,
+        update.update_date,
+        update.created_at,
+        update.notes,
+      ]),
+    )
+  );
+
+  // ── Approval Notes ──────────────────────────────────────────────────────
+  sections.push(
+    csvSection(
+      "APPROVAL NOTES",
+      ["ID", "Note Number", "Created By", "Created At"],
+      approvalNotes.map(note => [
+        note.id,
+        note.note_number,
+        note.created_by_name,
+        note.created_at,
+      ]),
+    )
+  );
+
+  // ── Queries ──────────────────────────────────────────────────────────────
+  sections.push(
+    csvSection(
+      "QUERIES",
+      [
+        "Query ID",
+        "Raised By",
+        "Raised By Role",
+        "Message",
+        "Resolved",
+        "Resolved By",
+        "Resolved At",
+        "Created At",
+        "Replies",
+      ],
+      queries.map(query => {
+        const replies = queryReplies
+          .filter(reply => reply.query_id === query.id)
+          .map(reply =>
+            `${reply.replied_by_name} (${reply.replied_by_role ?? ""}): ${reply.message}`
+          )
+          .join(" | ");
+
+        return [
+          query.id,
+          query.raised_by_name,
+          query.raised_by_role,
+          query.message,
+          query.is_resolved ? "Yes" : "No",
+          query.resolved_by_name,
+          query.resolved_at,
+          query.created_at,
+          replies,
+        ];
+      }),
+    )
+  );
+
+// ── Attachments ──────────────────────────────────────────────────────────
+sections.push(
+  csvSection(
+    "ATTACHMENTS",
+    [
+      "ID",
+      "Context",
+      "Context ID",
+      "Original Name",
+      "Stored Filename",
+      "MIME Type",
+      "Size (Bytes)",
+      "Uploaded By",
+      "Uploaded At",
+    ],
+    [
+      ...attachments.map(attachment => [
+        attachment.id,
+        attachment.context,
+        attachment.context_id,
+        attachment.original_name,
+        attachment.filename,
+        attachment.mime_type,
+        attachment.size_bytes,
+        attachment.uploaded_by_name,
+        attachment.uploaded_at,
+      ]),
+      ...replyAttachments.map(attachment => [
+        attachment.id,
+        attachment.context,
+        attachment.context_id,
+        attachment.original_name,
+        attachment.filename,
+        attachment.mime_type,
+        attachment.size_bytes,
+        attachment.uploaded_by_name,
+        attachment.uploaded_at,
+      ]),
+    ],
+  )
+);
+
+  const csv = sections.join("\r\n");
+
+  // UTF-8 BOM makes Excel correctly recognize the CSV as UTF-8.
+  const csvWithBom = "\uFEFF" + csv;
+
+  const safeRef = String(r.ref_number || `requisition-${id}`)
+    .replace(/[^a-zA-Z0-9_-]/g, "_");
+
+  res.setHeader("Content-Type", "application/zip");
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="${safeRef}.zip"`
+  );
+
+  const archive = new ZipArchive({
+    zlib: { level: 9 },
+  });
+
+  archive.on("error", (err: Error) => {
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Failed to create download package." });
+    } else {
+      res.destroy(err);
+    }
+  });
+
+  archive.pipe(res);
+
+  // Main CSV report.
+  archive.append(csvWithBom, {
+    name: `${safeRef}.csv`,
+  });
+
+  // Physical upload directory used by ReqFlow.
+  const uploadsDir = path.join(process.cwd(), "uploads");
+
+  // Requisition attachments.
+  for (const attachment of attachments) {
+    const filePath = path.join(uploadsDir, attachment.filename);
+
+    if (fs.existsSync(filePath)) {
+      archive.file(filePath, {
+        name: `attachments/requisition/${attachment.original_name}`,
+      });
+    }
+  }
+
+  // Query-reply attachments.
+  for (const attachment of replyAttachments) {
+    const filePath = path.join(uploadsDir, attachment.filename);
+
+    if (fs.existsSync(filePath)) {
+      archive.file(filePath, {
+        name: `attachments/query-replies/${attachment.original_name}`,
+      });
+    }
+  }
+
+  await archive.finalize();
+  });
+  // ── Attachments list ──────────────────────────────────────────────────────────
 router.get("/requisitions/:id/attachments", async (req, res) => {
   const id = Number(req.params.id);
   const baseUrl = process.env.BASE_URL ?? "/api";

@@ -179,6 +179,9 @@ export default function RequisitionDetail() {
   const isPurchaseHead = user.role === "purchase_head";
   const canResume = isOnHold && (isPurchaseHead || req.checker1_id === user.id || req.checker2_id === user.id || req.approver_id === user.id);
   const isPurchaseMember = user.role === "purchase_member" && req.assigned_to_id === user.id;
+  const canDownloadCsv =
+    req.status === "completed" &&
+    (user.role === "purchase_member" || user.role === "purchase_head");
   const canSubmit = user.role === "site_user" && req.status === "draft" && req.raised_by_id === user.id;
   const canRaiseQuery = ["site_user", "checker", "approver", "purchase_head", "purchase_member"].includes(user.role);
   // Point 1: raiser, either checker, or the approver can edit while it's
@@ -598,7 +601,19 @@ export default function RequisitionDetail() {
               <PlayCircle className="w-3.5 h-3.5" />Resume
             </Button>
           )}
-
+          {canDownloadCsv && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5"
+              onClick={() => {
+                window.location.href = `/api/requisitions/${id}/download`;
+              }}
+              data-testid="button-download-csv"
+            >
+              Download CSV
+            </Button>
+          )}
           {isPurchaseHead && req.status === "approved" && (
             <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
               <DialogTrigger asChild>
