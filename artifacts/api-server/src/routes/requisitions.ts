@@ -585,220 +585,256 @@ router.get("/requisitions/:id/download", async (req, res) => {
 
   const r = requisition as Record<string, unknown>;
 
-  const sections: string[] = [];
+  const csvFiles: Array<{ name: string; content: string }> = [];
 
-  // ── Requisition ─────────────────────────────────────────────────────────
-  sections.push(
-    csvSection(
-      "REQUISITION DETAILS",
-      ["Field", "Value"],
-      [
-        ["Reference Number", r.ref_number],
-        ["Status", r.status],
-        ["Project", r.project_name],
-        ["Site", r.site_name],
-        ["Requester", r.raised_by_name],
-        ["Requisition Date", r.requisition_date],
-        ["Priority", r.priority],
-        ["Purpose", r.purpose],
-        ["Notes", r.notes],
-        ["Submitted At", r.submitted_at],
-        ["Approved At", r.approved_at],
-        ["Completed At", r.completed_at],
-        ["Created At", r.created_at],
-        ["Updated At", r.updated_at],
-      ],
-    )
-  );
-
-  // ── Items ────────────────────────────────────────────────────────────────
-  sections.push(
-    csvSection(
-      "ITEMS",
-      [
-        "ID",
-        "Item Name",
-        "Asset / Equipment",
-        "Reference No.",
-        "Quantity",
-        "Unit",
-        "Expected Cost",
-        "Description",
-        "Remark",
-      ],
-      items.map(item => [
-        item.id,
-        item.item_name,
-        item.asset_name,
-        item.reference_no,
-        item.quantity,
-        item.unit,
-        item.expected_cost,
-        item.description,
-        item.remark,
-      ]),
-    )
-  );
-
-  // ── Workflow ─────────────────────────────────────────────────────────────
-  sections.push(
-    csvSection(
-      "WORKFLOW",
-      ["Stage", "Person", "Status", "Suggestion", "Reviewed At"],
-      [
+  // ── Requisition.csv ────────────────────────────────────────────────────────
+  csvFiles.push({
+    name: "Requisition.csv",
+    content:
+      "\uFEFF" +
+      csvSection(
+        "REQUISITION",
+        ["Field", "Value"],
         [
-          "Checker 1",
-          r.checker1_name,
-          r.checker1_status,
-          r.checker1_suggestion,
-          r.checker1_reviewed_at,
+          ["Reference Number", r.ref_number],
+          ["Status", r.status],
+          ["Project", r.project_name],
+          ["Site", r.site_name],
+          ["Requester", r.raised_by_name],
+          ["Requisition Date", r.requisition_date],
+          ["Priority", r.priority],
+          ["Purpose", r.purpose],
+          ["Notes", r.notes],
+          ["Submitted At", r.submitted_at],
+          ["Approved At", r.approved_at],
+          ["Completed At", r.completed_at],
+          ["Created At", r.created_at],
+          ["Updated At", r.updated_at],
+        ],
+      ),
+  });
+
+  // ── Items.csv ──────────────────────────────────────────────────────────────
+  csvFiles.push({
+    name: "Items.csv",
+    content:
+      "\uFEFF" +
+      csvSection(
+        "ITEMS",
+        [
+          "ID",
+          "Item Name",
+          "Asset / Equipment",
+          "Reference No.",
+          "Quantity",
+          "Unit",
+          "Expected Cost",
+          "Description",
+          "Remark",
+        ],
+        items.map(item => [
+          item.id,
+          item.item_name,
+          item.asset_name,
+          item.reference_no,
+          item.quantity,
+          item.unit,
+          item.expected_cost,
+          item.description,
+          item.remark,
+        ]),
+      ),
+  });
+
+  // ── Workflow.csv ───────────────────────────────────────────────────────────
+  csvFiles.push({
+    name: "Workflow.csv",
+    content:
+      "\uFEFF" +
+      csvSection(
+        "WORKFLOW",
+        ["Stage", "Person", "Status", "Suggestion", "Reviewed At"],
+        [
+          [
+            "Checker 1",
+            r.checker1_name,
+            r.checker1_status,
+            r.checker1_suggestion,
+            r.checker1_reviewed_at,
+          ],
+          [
+            "Checker 2",
+            r.checker2_name,
+            r.checker2_status,
+            r.checker2_suggestion,
+            r.checker2_reviewed_at,
+          ],
+          [
+            "Approver",
+            r.approver_name,
+            r.approver_status,
+            r.approver_suggestion,
+            r.approver_reviewed_at,
+          ],
+          [
+            "Purchase Head",
+            r.purchase_head_name,
+            "",
+            "",
+            "",
+          ],
+          [
+            "Assigned Purchase Member",
+            r.assigned_to_name,
+            "",
+            "",
+            r.assigned_at,
+          ],
+        ],
+      ),
+  });
+
+  // ── Status_Updates.csv ─────────────────────────────────────────────────────
+  csvFiles.push({
+    name: "Status_Updates.csv",
+    content:
+      "\uFEFF" +
+      csvSection(
+        "STATUS UPDATES",
+        ["ID", "Stage", "Updated By", "Update Date", "Created At", "Notes"],
+        statusUpdates.map(update => [
+          update.id,
+          update.stage,
+          update.updated_by_name,
+          update.update_date,
+          update.created_at,
+          update.notes,
+        ]),
+      ),
+  });
+
+  // ── Approval_Notes.csv ─────────────────────────────────────────────────────
+  csvFiles.push({
+    name: "Approval_Notes.csv",
+    content:
+      "\uFEFF" +
+      csvSection(
+        "APPROVAL NOTES",
+        ["ID", "Note Number", "Created By", "Created At"],
+        approvalNotes.map(note => [
+          note.id,
+          note.note_number,
+          note.created_by_name,
+          note.created_at,
+        ]),
+      ),
+  });
+
+  // ── Queries.csv ────────────────────────────────────────────────────────────
+  csvFiles.push({
+    name: "Queries.csv",
+    content:
+      "\uFEFF" +
+      csvSection(
+        "QUERIES",
+        [
+          "Query ID",
+          "Raised By",
+          "Raised By Role",
+          "Message",
+          "Resolved",
+          "Resolved By",
+          "Resolved At",
+          "Created At",
+          "Reply By",
+          "Reply Role",
+          "Reply Message",
+          "Reply Created At",
+        ],
+        queries.flatMap(query => {
+          const replies = queryReplies.filter(
+            reply => reply.query_id === query.id
+          );
+
+          if (replies.length === 0) {
+            return [[
+              query.id,
+              query.raised_by_name,
+              query.raised_by_role,
+              query.message,
+              query.is_resolved ? "Yes" : "No",
+              query.resolved_by_name,
+              query.resolved_at,
+              query.created_at,
+              "",
+              "",
+              "",
+              "",
+            ]];
+          }
+
+          return replies.map(reply => [
+            query.id,
+            query.raised_by_name,
+            query.raised_by_role,
+            query.message,
+            query.is_resolved ? "Yes" : "No",
+            query.resolved_by_name,
+            query.resolved_at,
+            query.created_at,
+            reply.replied_by_name,
+            reply.replied_by_role,
+            reply.message,
+            reply.created_at,
+          ]);
+        }),
+      ),
+  });
+
+  // ── Attachments.csv ────────────────────────────────────────────────────────
+  csvFiles.push({
+    name: "Attachments.csv",
+    content:
+      "\uFEFF" +
+      csvSection(
+        "ATTACHMENTS",
+        [
+          "ID",
+          "Context",
+          "Context ID",
+          "Original Name",
+          "Stored Filename",
+          "MIME Type",
+          "Size (Bytes)",
+          "Uploaded By",
+          "Uploaded At",
         ],
         [
-          "Checker 2",
-          r.checker2_name,
-          r.checker2_status,
-          r.checker2_suggestion,
-          r.checker2_reviewed_at,
+          ...attachments.map(attachment => [
+            attachment.id,
+            attachment.context,
+            attachment.context_id,
+            attachment.original_name,
+            attachment.filename,
+            attachment.mime_type,
+            attachment.size_bytes,
+            attachment.uploaded_by_name,
+            attachment.uploaded_at,
+          ]),
+          ...replyAttachments.map(attachment => [
+            attachment.id,
+            attachment.context,
+            attachment.context_id,
+            attachment.original_name,
+            attachment.filename,
+            attachment.mime_type,
+            attachment.size_bytes,
+            attachment.uploaded_by_name,
+            attachment.uploaded_at,
+          ]),
         ],
-        [
-          "Approver",
-          r.approver_name,
-          r.approver_status,
-          r.approver_suggestion,
-          r.approver_reviewed_at,
-        ],
-        [
-          "Purchase Head",
-          r.purchase_head_name,
-          "",
-          "",
-          "",
-        ],
-        [
-          "Assigned Purchase Member",
-          r.assigned_to_name,
-          "",
-          "",
-          r.assigned_at,
-        ],
-      ],
-    )
-  );
-
-  // ── Status Updates ──────────────────────────────────────────────────────
-  sections.push(
-    csvSection(
-      "STATUS UPDATES",
-      ["ID", "Stage", "Updated By", "Update Date", "Created At", "Notes"],
-      statusUpdates.map(update => [
-        update.id,
-        update.stage,
-        update.updated_by_name,
-        update.update_date,
-        update.created_at,
-        update.notes,
-      ]),
-    )
-  );
-
-  // ── Approval Notes ──────────────────────────────────────────────────────
-  sections.push(
-    csvSection(
-      "APPROVAL NOTES",
-      ["ID", "Note Number", "Created By", "Created At"],
-      approvalNotes.map(note => [
-        note.id,
-        note.note_number,
-        note.created_by_name,
-        note.created_at,
-      ]),
-    )
-  );
-
-  // ── Queries ──────────────────────────────────────────────────────────────
-  sections.push(
-    csvSection(
-      "QUERIES",
-      [
-        "Query ID",
-        "Raised By",
-        "Raised By Role",
-        "Message",
-        "Resolved",
-        "Resolved By",
-        "Resolved At",
-        "Created At",
-        "Replies",
-      ],
-      queries.map(query => {
-        const replies = queryReplies
-          .filter(reply => reply.query_id === query.id)
-          .map(reply =>
-            `${reply.replied_by_name} (${reply.replied_by_role ?? ""}): ${reply.message}`
-          )
-          .join(" | ");
-
-        return [
-          query.id,
-          query.raised_by_name,
-          query.raised_by_role,
-          query.message,
-          query.is_resolved ? "Yes" : "No",
-          query.resolved_by_name,
-          query.resolved_at,
-          query.created_at,
-          replies,
-        ];
-      }),
-    )
-  );
-
-// ── Attachments ──────────────────────────────────────────────────────────
-sections.push(
-  csvSection(
-    "ATTACHMENTS",
-    [
-      "ID",
-      "Context",
-      "Context ID",
-      "Original Name",
-      "Stored Filename",
-      "MIME Type",
-      "Size (Bytes)",
-      "Uploaded By",
-      "Uploaded At",
-    ],
-    [
-      ...attachments.map(attachment => [
-        attachment.id,
-        attachment.context,
-        attachment.context_id,
-        attachment.original_name,
-        attachment.filename,
-        attachment.mime_type,
-        attachment.size_bytes,
-        attachment.uploaded_by_name,
-        attachment.uploaded_at,
-      ]),
-      ...replyAttachments.map(attachment => [
-        attachment.id,
-        attachment.context,
-        attachment.context_id,
-        attachment.original_name,
-        attachment.filename,
-        attachment.mime_type,
-        attachment.size_bytes,
-        attachment.uploaded_by_name,
-        attachment.uploaded_at,
-      ]),
-    ],
-  )
-);
-
-  const csv = sections.join("\r\n");
-
-  // UTF-8 BOM makes Excel correctly recognize the CSV as UTF-8.
-  const csvWithBom = "\uFEFF" + csv;
+      ),
+  });  
 
   const safeRef = String(r.ref_number || `requisition-${id}`)
     .replace(/[^a-zA-Z0-9_-]/g, "_");
@@ -824,9 +860,11 @@ sections.push(
   archive.pipe(res);
 
   // Main CSV report.
-  archive.append(csvWithBom, {
-    name: `${safeRef}.csv`,
-  });
+  for (const csvFile of csvFiles) {
+    archive.append(csvFile.content, {
+      name: csvFile.name,
+    });
+  }
 
   // Physical upload directory used by ReqFlow.
   const uploadsDir = path.join(process.cwd(), "uploads");
