@@ -300,6 +300,13 @@ export default function RequisitionDetail() {
     }
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
+  
+  const formatStatusUpdateTime = (value: string) => {
+    const date = new Date(value);
+    date.setMinutes(date.getMinutes() - 330);
+
+    return formatDateTime(date.toISOString());
+  };
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-5">
@@ -1046,7 +1053,9 @@ export default function RequisitionDetail() {
                     <div className="w-2 h-2 rounded-full bg-primary mt-2 flex-shrink-0" />
                     <div>
                       <p className="text-sm font-medium">{STAGE_OPTIONS.find(o => o.value === u.stage)?.label ?? u.stage}</p>
-                      <p className="text-xs text-muted-foreground">{u.updated_by_name} · {formatDateTime(u.created_at)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {u.updated_by_name} · {formatStatusUpdateTime(u.created_at)}
+                      </p>
                       {u.notes && <p className="text-sm text-muted-foreground mt-1">{u.notes}</p>}
                     </div>
                   </div>

@@ -60,7 +60,7 @@ export default function RequisitionsList() {
   if (statusFilter !== "all") params.status = statusFilter;
   if (priorityFilter !== "all") params.priority = priorityFilter;
   if (user.role === "site_user") params.raised_by_id = user.id;
-  if (user.role === "purchase_member") params.assigned_to_id = user.id;
+  // if (user.role === "purchase_member") params.assigned_to_id = user.id;
   if (user.role === "checker") params.checker_id = user.id;
   if (search) params.search = search;
 
