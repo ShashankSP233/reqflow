@@ -611,7 +611,7 @@ export default function RequisitionDetail() {
               }}
               data-testid="button-download-csv"
             >
-              Download CSV
+              Download
             </Button>
           )}
           {isPurchaseHead && req.status === "approved" && (

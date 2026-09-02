@@ -1,6 +1,7 @@
 import path from "path";
 import fs from "fs";
 import { createRequire } from "module";
+import PDFDocument from "pdfkit";
 
 const require = createRequire(import.meta.url);
 const { ZipArchive } = require("archiver");
@@ -481,7 +482,7 @@ router.delete("/requisitions/:id/items/:itemId", async (req, res) => {
   res.status(204).send();
 });
 
-// ── Completed Requisition CSV Download ───────────────────────────────────────
+// ── Completed Requisition PDF Download ────────────────────────────────────────
 router.get("/requisitions/:id/download", async (req, res) => {
   const user = req.currentUser;
 
@@ -523,7 +524,8 @@ router.get("/requisitions/:id/download", async (req, res) => {
     return;
   }
 
-  // Fetch all related data.
+  // ── Fetch related data ─────────────────────────────────────────────────────
+
   const items = await db
     .select()
     .from(requisitionItemsTable)
@@ -549,12 +551,12 @@ router.get("/requisitions/:id/download", async (req, res) => {
         .where(
           inArray(
             queryRepliesTable.query_id,
-            queries.map(q => q.id)
-          )
+            queries.map(q => q.id),
+          ),
         )
         .orderBy(queryRepliesTable.id)
     : [];
-  
+
   const replyAttachments = queryReplies.length > 0
     ? await db
         .select()
@@ -564,9 +566,9 @@ router.get("/requisitions/:id/download", async (req, res) => {
             eq(attachmentsTable.context, "query_reply"),
             inArray(
               attachmentsTable.context_id,
-              queryReplies.map(reply => reply.id)
-            )
-          )
+              queryReplies.map(reply => reply.id),
+            ),
+          ),
         )
         .orderBy(attachmentsTable.id)
     : [];
@@ -585,314 +587,741 @@ router.get("/requisitions/:id/download", async (req, res) => {
 
   const r = requisition as Record<string, unknown>;
 
-  const csvFiles: Array<{ name: string; content: string }> = [];
+  // ── Create printable PDF ───────────────────────────────────────────────────
 
-  // ── Requisition.csv ────────────────────────────────────────────────────────
-  csvFiles.push({
-    name: "Requisition.csv",
-    content:
-      "\uFEFF" +
-      csvSection(
-        "REQUISITION",
-        ["Field", "Value"],
-        [
-          ["Reference Number", r.ref_number],
-          ["Status", r.status],
-          ["Project", r.project_name],
-          ["Site", r.site_name],
-          ["Requester", r.raised_by_name],
-          ["Requisition Date", r.requisition_date],
-          ["Priority", r.priority],
-          ["Purpose", r.purpose],
-          ["Notes", r.notes],
-          ["Submitted At", r.submitted_at],
-          ["Approved At", r.approved_at],
-          ["Completed At", r.completed_at],
-          ["Created At", r.created_at],
-          ["Updated At", r.updated_at],
-        ],
-      ),
-  });
+  const pdfBuffer = await new Promise<Buffer>((resolve, reject) => {
+    const doc = new PDFDocument({
+      size: "A4",
+      margin: 40,
+      bufferPages: true,
+      info: {
+        Title: `Requisition ${String(r.ref_number || id)}`,
+        Author: "ReqFlow",
+        Subject: "Completed Requisition",
+      },
+    });
 
-  // ── Items.csv ──────────────────────────────────────────────────────────────
-  csvFiles.push({
-    name: "Items.csv",
-    content:
-      "\uFEFF" +
-      csvSection(
-        "ITEMS",
-        [
-          "ID",
-          "Item Name",
-          "Asset / Equipment",
-          "Reference No.",
-          "Quantity",
-          "Unit",
-          "Expected Cost",
-          "Description",
-          "Remark",
-        ],
-        items.map(item => [
-          item.id,
-          item.item_name,
-          item.asset_name,
-          item.reference_no,
-          item.quantity,
-          item.unit,
-          item.expected_cost,
-          item.description,
-          item.remark,
-        ]),
-      ),
-  });
+    const chunks: Buffer[] = [];
 
-  // ── Workflow.csv ───────────────────────────────────────────────────────────
-  csvFiles.push({
-    name: "Workflow.csv",
-    content:
-      "\uFEFF" +
-      csvSection(
-        "WORKFLOW",
-        ["Stage", "Person", "Status", "Suggestion", "Reviewed At"],
-        [
-          [
-            "Checker 1",
-            r.checker1_name,
-            r.checker1_status,
-            r.checker1_suggestion,
-            r.checker1_reviewed_at,
-          ],
-          [
-            "Checker 2",
-            r.checker2_name,
-            r.checker2_status,
-            r.checker2_suggestion,
-            r.checker2_reviewed_at,
-          ],
-          [
-            "Approver",
-            r.approver_name,
-            r.approver_status,
-            r.approver_suggestion,
-            r.approver_reviewed_at,
-          ],
-          [
-            "Purchase Head",
-            r.purchase_head_name,
-            "",
-            "",
-            "",
-          ],
-          [
-            "Assigned Purchase Member",
-            r.assigned_to_name,
-            "",
-            "",
-            r.assigned_at,
-          ],
-        ],
-      ),
-  });
+    doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
 
-  // ── Status_Updates.csv ─────────────────────────────────────────────────────
-  csvFiles.push({
-    name: "Status_Updates.csv",
-    content:
-      "\uFEFF" +
-      csvSection(
-        "STATUS UPDATES",
-        ["ID", "Stage", "Updated By", "Update Date", "Created At", "Notes"],
-        statusUpdates.map(update => [
-          update.id,
-          update.stage,
-          update.updated_by_name,
-          update.update_date,
-          update.created_at,
-          update.notes,
-        ]),
-      ),
-  });
+    const pageWidth =
+      doc.page.width -
+      doc.page.margins.left -
+      doc.page.margins.right;
 
-  // ── Approval_Notes.csv ─────────────────────────────────────────────────────
-  csvFiles.push({
-    name: "Approval_Notes.csv",
-    content:
-      "\uFEFF" +
-      csvSection(
-        "APPROVAL NOTES",
-        ["ID", "Note Number", "Created By", "Created At"],
-        approvalNotes.map(note => [
-          note.id,
-          note.note_number,
-          note.created_by_name,
-          note.created_at,
-        ]),
-      ),
-  });
+    const bottomY =
+      doc.page.height -
+      doc.page.margins.bottom;
 
-  // ── Queries.csv ────────────────────────────────────────────────────────────
-  csvFiles.push({
-    name: "Queries.csv",
-    content:
-      "\uFEFF" +
-      csvSection(
-        "QUERIES",
-        [
-          "Query ID",
-          "Raised By",
-          "Raised By Role",
-          "Message",
-          "Resolved",
-          "Resolved By",
-          "Resolved At",
-          "Created At",
-          "Reply By",
-          "Reply Role",
-          "Reply Message",
-          "Reply Created At",
-        ],
-        queries.flatMap(query => {
-          const replies = queryReplies.filter(
-            reply => reply.query_id === query.id
+    const safeText = (value: unknown): string => {
+      if (value === null || value === undefined || value === "") {
+        return "—";
+      }
+
+      return String(value);
+    };
+
+    const drawSectionTitle = (title: string) => {
+      doc.font("Helvetica-Bold")
+        .fontSize(13)
+        .text(title);
+
+      doc.moveDown(0.4);
+    };
+
+    const ensureSpace = (height: number) => {
+      if (doc.y + height > bottomY) {
+        doc.addPage();
+      }
+    };
+
+    /*
+    * Draw a simple two-column table.
+    *
+    * IMPORTANT:
+    * Always use the page's left margin instead of doc.x.
+    * PDFKit changes doc.x while text is being written, which was
+    * causing the previous rows to progressively shift to the right.
+    */
+    const drawFieldTable = (fields: Array<[string, unknown]>) => {
+      const labelWidth = 145;
+      const valueWidth = pageWidth - labelWidth;
+
+      for (const [label, value] of fields) {
+        const valueText = safeText(value);
+
+        doc.font("Helvetica")
+          .fontSize(9);
+
+        const valueHeight = doc.heightOfString(valueText, {
+          width: valueWidth - 12,
+        });
+
+        const labelHeight = doc.heightOfString(label, {
+          width: labelWidth - 12,
+        });
+
+        const rowHeight =
+          Math.max(
+            24,
+            valueHeight + 10,
+            labelHeight + 10,
           );
 
-          if (replies.length === 0) {
-            return [[
-              query.id,
-              query.raised_by_name,
-              query.raised_by_role,
-              query.message,
-              query.is_resolved ? "Yes" : "No",
-              query.resolved_by_name,
-              query.resolved_at,
-              query.created_at,
-              "",
-              "",
-              "",
-              "",
-            ]];
-          }
+        /*
+        * If this row will not fit, start it on the next page.
+        */
+        if (doc.y + rowHeight > bottomY) {
+          doc.addPage();
+        }
 
-          return replies.map(reply => [
-            query.id,
-            query.raised_by_name,
-            query.raised_by_role,
-            query.message,
-            query.is_resolved ? "Yes" : "No",
-            query.resolved_by_name,
-            query.resolved_at,
-            query.created_at,
-            reply.replied_by_name,
-            reply.replied_by_role,
-            reply.message,
-            reply.created_at,
-          ]);
-        }),
-      ),
+        /*
+        * ALWAYS start from the actual left page margin.
+        */
+        const startX = doc.page.margins.left;
+        const startY = doc.y;
+
+        /*
+        * Draw the two cells.
+        */
+        doc.rect(
+          startX,
+          startY,
+          labelWidth,
+          rowHeight,
+        ).stroke();
+
+        doc.rect(
+          startX + labelWidth,
+          startY,
+          valueWidth,
+          rowHeight,
+        ).stroke();
+
+        /*
+        * Label.
+        */
+        doc.font("Helvetica-Bold")
+          .fontSize(9)
+          .text(
+            label,
+            startX + 6,
+            startY + 7,
+            {
+              width: labelWidth - 12,
+              height: rowHeight - 10,
+            },
+          );
+
+        /*
+        * Value.
+        */
+        doc.font("Helvetica")
+          .fontSize(9)
+          .text(
+            valueText,
+            startX + labelWidth + 6,
+            startY + 7,
+            {
+              width: valueWidth - 12,
+              height: rowHeight - 10,
+            },
+          );
+
+        /*
+        * Move vertically only.
+        * The next row will again use the fixed left margin.
+        */
+        doc.y = startY + rowHeight;
+      }
+
+      doc.moveDown(0.8);
+    };
+
+    /*
+    * Draw one requisition item.
+    *
+    * The table itself handles page breaks, so long descriptions
+    * and remarks will wrap vertically instead of forcing the
+    * whole item into an unusable horizontal layout.
+    */
+const drawItemsTable = () => {
+  ensureSpace(80);
+
+  drawSectionTitle(`Items (${items.length})`);
+
+  if (items.length === 0) {
+    doc.font("Helvetica")
+      .fontSize(9)
+      .text("No items recorded.");
+
+    doc.moveDown();
+    return;
+  }
+
+  const startX = doc.page.margins.left;
+
+  // Item Name | Description | Qty
+  const itemNameWidth = 150;
+  const qtyWidth = 70;
+  const descriptionWidth =
+    pageWidth - itemNameWidth - qtyWidth;
+
+  const headers = [
+    "Item Name",
+    "Description",
+    "Qty",
+  ];
+
+  const widths = [
+    itemNameWidth,
+    descriptionWidth,
+    qtyWidth,
+  ];
+
+  const drawHeader = () => {
+    const headerY = doc.y;
+
+    /*
+     * Keep the header together with the table.
+     */
+    if (headerY + 30 > bottomY) {
+      doc.addPage();
+    }
+
+    const y = doc.y;
+    let x = startX;
+
+    for (let i = 0; i < headers.length; i++) {
+      doc.rect(
+        x,
+        y,
+        widths[i],
+        26,
+      ).stroke();
+
+      doc.font("Helvetica-Bold")
+        .fontSize(8)
+        .text(
+          headers[i],
+          x + 5,
+          y + 8,
+          {
+            width: widths[i] - 10,
+            height: 14,
+            align: i === 2 ? "center" : "left",
+          },
+        );
+
+      x += widths[i];
+    }
+
+    doc.y = y + 26;
+  };
+
+  const drawRow = (
+    item: typeof items[number],
+  ) => {
+    const itemName = safeText(item.item_name);
+    const description = safeText(item.description);
+
+    const quantity =
+      item.quantity == null
+        ? "—"
+        : `${safeText(item.quantity)}${item.unit ? ` ${item.unit}` : ""}`;
+
+    const values = [
+      itemName,
+      description,
+      quantity,
+    ];
+
+    doc.font("Helvetica")
+      .fontSize(8);
+
+    const padding = 5;
+
+    /*
+     * Calculate the required row height based on the
+     * longest wrapped cell.
+     */
+    let rowHeight = 26;
+
+    for (let i = 0; i < values.length; i++) {
+      const height = doc.heightOfString(
+        values[i],
+        {
+          width: widths[i] - padding * 2,
+        },
+      );
+
+      rowHeight = Math.max(
+        rowHeight,
+        height + padding * 2,
+      );
+    }
+
+    /*
+     * Move the complete row to the next page if it
+     * doesn't fit.
+     */
+    if (doc.y + rowHeight > bottomY) {
+      doc.addPage();
+
+      drawSectionTitle("Items (continued)");
+      drawHeader();
+    }
+
+    const y = doc.y;
+    let x = startX;
+
+    for (let i = 0; i < values.length; i++) {
+      doc.rect(
+        x,
+        y,
+        widths[i],
+        rowHeight,
+      ).stroke();
+
+      doc.font("Helvetica")
+        .fontSize(8)
+        .text(
+          values[i],
+          x + padding,
+          y + padding,
+          {
+            width: widths[i] - padding * 2,
+            height: rowHeight - padding * 2,
+            align: i === 2 ? "center" : "left",
+          },
+        );
+
+      x += widths[i];
+    }
+
+    doc.y = y + rowHeight;
+  };
+
+  drawHeader();
+
+  for (const item of items) {
+    drawRow(item);
+  }
+
+  doc.moveDown(0.8);
+};
+
+    /*
+    * Workflow table.
+    */
+    const workflowHeaders = [
+      "Stage",
+      "Person",
+      "Status",
+      "Suggestion",
+      "Reviewed At",
+    ];
+
+    const workflowWidths = [
+      75,
+      105,
+      70,
+      145,
+      pageWidth - 395,
+    ];
+
+    const drawWorkflowHeader = () => {
+      ensureSpace(30);
+
+      const startX = doc.page.margins.left;
+      const startY = doc.y;
+
+      let x = startX;
+
+      for (let i = 0; i < workflowHeaders.length; i++) {
+        const width = workflowWidths[i];
+
+        doc.rect(
+          x,
+          startY,
+          width,
+          24,
+        ).stroke();
+
+        doc.font("Helvetica-Bold")
+          .fontSize(7.5)
+          .text(
+            workflowHeaders[i],
+            x + 5,
+            startY + 7,
+            {
+              width: width - 10,
+              height: 14,
+            },
+          );
+
+        x += width;
+      }
+
+      doc.y = startY + 24;
+    };
+
+    const drawWorkflowRow = (
+      stage: string,
+      person: unknown,
+      status: unknown,
+      suggestion: unknown,
+      reviewedAt: unknown,
+    ) => {
+      const values = [
+        stage,
+        safeText(person),
+        safeText(status),
+        safeText(suggestion),
+        safeText(reviewedAt),
+      ];
+
+      const padding = 5;
+
+      doc.font("Helvetica")
+        .fontSize(7.5);
+
+      let rowHeight = 22;
+
+      /*
+      * Calculate the height needed by every cell.
+      */
+      for (let i = 0; i < values.length; i++) {
+        const height = doc.heightOfString(
+          values[i],
+          {
+            width:
+              workflowWidths[i] -
+              padding * 2,
+          },
+        );
+
+        rowHeight = Math.max(
+          rowHeight,
+          height + padding * 2,
+        );
+      }
+
+      /*
+      * If the row will not fit, start a new page
+      * and redraw the Workflow heading/header.
+      */
+      if (doc.y + rowHeight > bottomY) {
+        doc.addPage();
+
+        drawSectionTitle("Workflow");
+        drawWorkflowHeader();
+      }
+
+      const startX = doc.page.margins.left;
+      const startY = doc.y;
+
+      let x = startX;
+
+      for (let i = 0; i < values.length; i++) {
+        const width = workflowWidths[i];
+
+        doc.rect(
+          x,
+          startY,
+          width,
+          rowHeight,
+        ).stroke();
+
+        doc.font(
+          i === 0
+            ? "Helvetica-Bold"
+            : "Helvetica",
+        )
+          .fontSize(7.5)
+          .text(
+            values[i],
+            x + padding,
+            startY + padding,
+            {
+              width: width - padding * 2,
+              height: rowHeight - padding * 2,
+            },
+          );
+
+        x += width;
+      }
+
+      doc.y = startY + rowHeight;
+    };
+
+    // ─────────────────────────────────────────────────────────────
+    // PDF HEADER
+    // ─────────────────────────────────────────────────────────────
+
+    doc.font("Helvetica-Bold")
+      .fontSize(20)
+      .text("REQUISITION");
+
+    doc.font("Helvetica")
+      .fontSize(10)
+      .text(
+        `Reference Number: ${safeText(r.ref_number)}`,
+      );
+
+    doc.moveDown(0.8);
+
+    // ─────────────────────────────────────────────────────────────
+    // 1. REQUISITION DETAILS
+    // ─────────────────────────────────────────────────────────────
+
+    drawSectionTitle("Requisition Details");
+
+    drawFieldTable([
+      ["Reference Number", r.ref_number],
+      ["Status", r.status],
+      ["Project", r.project_name],
+      ["Site", r.site_name],
+      ["Requester", r.raised_by_name],
+      ["Requisition Date", r.requisition_date],
+      ["Priority", r.priority],
+      ["Purpose", r.purpose],
+      ["Notes", r.notes],
+      ["Submitted At", r.submitted_at],
+      ["Approved At", r.approved_at],
+      ["Completed At", r.completed_at],
+      ["Created At", r.created_at],
+      ["Updated At", r.updated_at],
+      [
+        "Total Expected Cost",
+        items.reduce(
+          (sum, item) =>
+            sum +
+            (
+              item.expected_cost != null
+                ? Number(item.expected_cost)
+                : 0
+            ),
+          0,
+        ),
+      ],
+    ]);
+
+    // ─────────────────────────────────────────────────────────────
+    // APPROVAL NOTES
+    // ─────────────────────────────────────────────────────────────
+
+    if (approvalNotes.length > 0) {
+      ensureSpace(60);
+
+      drawSectionTitle("Approval Notes");
+
+      drawFieldTable(
+        approvalNotes.map((note, index) => [
+          `Approval Note ${index + 1}`,
+          note.note_number,
+        ]),
+      );
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 2. ITEMS
+    // ─────────────────────────────────────────────────────────────
+
+    drawItemsTable();
+    // ─────────────────────────────────────────────────────────────
+    // 3. WORKFLOW
+    // ─────────────────────────────────────────────────────────────
+
+    ensureSpace(80);
+
+    drawSectionTitle("Workflow");
+    drawWorkflowHeader();
+
+    drawWorkflowRow(
+      "Checker 1",
+      r.checker1_name,
+      r.checker1_status,
+      r.checker1_suggestion,
+      r.checker1_reviewed_at,
+    );
+
+    drawWorkflowRow(
+      "Checker 2",
+      r.checker2_name,
+      r.checker2_status,
+      r.checker2_suggestion,
+      r.checker2_reviewed_at,
+    );
+
+    drawWorkflowRow(
+      "Approver",
+      r.approver_name,
+      r.approver_status,
+      r.approver_suggestion,
+      r.approver_reviewed_at,
+    );
+
+    drawWorkflowRow(
+      "Purchase Head",
+      r.purchase_head_name,
+      "",
+      "",
+      "",
+    );
+
+    drawWorkflowRow(
+      "Assigned Purchase Member",
+      r.assigned_to_name,
+      "",
+      "",
+      r.assigned_at,
+    );
+
+    // ─────────────────────────────────────────────────────────────
+    // PAGE NUMBERS / FOOTERS
+    // ─────────────────────────────────────────────────────────────
+
+    /*
+    * At this point all pages already exist, so PDFKit knows
+    * the final page count.
+    *
+    * IMPORTANT:
+    * The footer is placed INSIDE the bottom margin.
+    * The old code used `page.height - 28`, which is below the
+    * usable page area because the bottom margin is 40. That
+    * caused PDFKit to create three extra pages containing
+    * only the footer.
+    */
+    const pageRange = doc.bufferedPageRange();
+
+    for (let i = 0; i < pageRange.count; i++) {
+      doc.switchToPage(i);
+
+      const footerY =
+        doc.page.height -
+        doc.page.margins.bottom +
+        2;
+
+      doc.font("Helvetica")
+        .fontSize(7)
+        .text(
+          `ReqFlow • ${safeText(r.ref_number)} • Page ${i + 1} of ${pageRange.count}`,
+          doc.page.margins.left,
+          footerY,
+          {
+            width: pageWidth,
+            height: 10,
+            align: "center",
+          },
+        );
+    }
+
+    doc.end();
   });
 
-  // ── Attachments.csv ────────────────────────────────────────────────────────
-  csvFiles.push({
-    name: "Attachments.csv",
-    content:
-      "\uFEFF" +
-      csvSection(
-        "ATTACHMENTS",
-        [
-          "ID",
-          "Context",
-          "Context ID",
-          "Original Name",
-          "Stored Filename",
-          "MIME Type",
-          "Size (Bytes)",
-          "Uploaded By",
-          "Uploaded At",
-        ],
-        [
-          ...attachments.map(attachment => [
-            attachment.id,
-            attachment.context,
-            attachment.context_id,
-            attachment.original_name,
-            attachment.filename,
-            attachment.mime_type,
-            attachment.size_bytes,
-            attachment.uploaded_by_name,
-            attachment.uploaded_at,
-          ]),
-          ...replyAttachments.map(attachment => [
-            attachment.id,
-            attachment.context,
-            attachment.context_id,
-            attachment.original_name,
-            attachment.filename,
-            attachment.mime_type,
-            attachment.size_bytes,
-            attachment.uploaded_by_name,
-            attachment.uploaded_at,
-          ]),
-        ],
-      ),
-  });  
+  // ── Create ZIP package ─────────────────────────────────────────────────────
 
-  const safeRef = String(r.ref_number || `requisition-${id}`)
-    .replace(/[^a-zA-Z0-9_-]/g, "_");
+  const safeRef = String(
+    r.ref_number || `requisition-${id}`,
+  ).replace(
+    /[^a-zA-Z0-9_-]/g,
+    "_",
+  );
 
-  res.setHeader("Content-Type", "application/zip");
+  res.setHeader(
+    "Content-Type",
+    "application/zip",
+  );
+
   res.setHeader(
     "Content-Disposition",
-    `attachment; filename="${safeRef}.zip"`
+    `attachment; filename="${safeRef}.zip"`,
   );
 
   const archive = new ZipArchive({
     zlib: { level: 9 },
   });
 
-  archive.on("error", (err: Error) => {
-    if (!res.headersSent) {
-      res.status(500).json({ error: "Failed to create download package." });
-    } else {
-      res.destroy(err);
-    }
-  });
+  archive.on(
+    "error",
+    (err: Error) => {
+      if (!res.headersSent) {
+        res.status(500).json({
+          error:
+            "Failed to create download package.",
+        });
+      } else {
+        res.destroy(err);
+      }
+    },
+  );
 
   archive.pipe(res);
 
-  // Main CSV report.
-  for (const csvFile of csvFiles) {
-    archive.append(csvFile.content, {
-      name: csvFile.name,
-    });
-  }
+  // Printable PDF.
+  archive.append(
+    pdfBuffer,
+    {
+      name: "Requisition.pdf",
+    },
+  );
 
-  // Physical upload directory used by ReqFlow.
-  const uploadsDir = path.join(process.cwd(), "uploads");
+  // ── Physical upload directory ──────────────────────────────────────────────
 
-  // Requisition attachments.
-  for (const attachment of attachments) {
-    const filePath = path.join(uploadsDir, attachment.filename);
+  const uploadsDir = path.join(
+    process.cwd(),
+    "uploads",
+  );
+
+  // ── Requisition attachments ────────────────────────────────────────────────
+
+  for (
+    const attachment of attachments
+  ) {
+    const filePath = path.join(
+      uploadsDir,
+      attachment.filename,
+    );
 
     if (fs.existsSync(filePath)) {
-      archive.file(filePath, {
-        name: `attachments/requisition/${attachment.original_name}`,
-      });
+      archive.file(
+        filePath,
+        {
+          name:
+            `attachments/requisition/${attachment.original_name}`,
+        },
+      );
     }
   }
 
-  // Query-reply attachments.
-  for (const attachment of replyAttachments) {
-    const filePath = path.join(uploadsDir, attachment.filename);
+  // ── Query-reply attachments ────────────────────────────────────────────────
+
+  for (
+    const attachment of replyAttachments
+  ) {
+    const filePath = path.join(
+      uploadsDir,
+      attachment.filename,
+    );
 
     if (fs.existsSync(filePath)) {
-      archive.file(filePath, {
-        name: `attachments/query-replies/${attachment.original_name}`,
-      });
+      archive.file(
+        filePath,
+        {
+          name:
+            `attachments/query-replies/${attachment.original_name}`,
+        },
+      );
     }
   }
 
   await archive.finalize();
-  });
+});
+
   // ── Attachments list ──────────────────────────────────────────────────────────
 router.get("/requisitions/:id/attachments", async (req, res) => {
   const id = Number(req.params.id);
