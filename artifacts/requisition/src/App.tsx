@@ -15,6 +15,8 @@ import Analytics from "@/pages/Analytics";
 import SetupCompanies from "@/pages/SetupCompanies";
 import SetupUsers from "@/pages/SetupUsers";
 import { ApiError } from "@workspace/api-client-react";
+import PrintRequisitions from "@/pages/PrintRequisitions";
+
 
 // A 401/403/404 is a definitive rejection, not a transient blip — retrying
 // it a few times with backoff (React Query's default) just makes the page
@@ -38,6 +40,7 @@ function Router() {
         <Route path="/" component={Dashboard} />
         <Route path="/requisitions" component={RequisitionsList} />
         <Route path="/requisitions/new" component={CreateRequisition} />
+        <Route path="/requisitions/print" component={PrintRequisitions} />
         <Route path="/requisitions/:id" component={RequisitionDetail} />
         <Route path="/analytics" component={Analytics} />
         <Route path="/setup/companies" component={SetupCompanies} />
