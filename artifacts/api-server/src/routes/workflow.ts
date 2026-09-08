@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { requisitionsTable, approvalNotesTable } from "@workspace/db";
+import { requisitionsTable, approvalNotesTable, statusUpdatesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { todayIST } from "../lib/business-days";
 
@@ -257,6 +257,13 @@ router.post("/requisitions/:id/approval-notes", async (req, res) => {
     note_number,
     created_by_name: req.currentUser.name,
   }).returning();
+    await db.insert(statusUpdatesTable).values({
+    requisition_id: id,
+    updated_by_name: req.currentUser.name,
+    stage: "prepared",
+    notes: `Approval Note: ${note_number}`,
+    update_date: todayIST(),
+  });
   res.status(201).json({ ...row, created_at: row.created_at.toISOString() });
 });
 

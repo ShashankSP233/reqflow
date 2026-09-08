@@ -9,13 +9,23 @@ const router = Router();
 
 router.post("/auth/login", async (req, res) => {
   const { name, password } = req.body;
+
+  console.log("LOGIN DEBUG:", {
+    name,
+    passwordProvided: !!password,
+  });
+
   if (!name || !password) {
     res.status(400).json({ error: "name and password are required" });
     return;
   }
 
   const [user] = await db.select().from(usersTable).where(eq(usersTable.name, name));
-
+  console.log("USER DEBUG:", {
+    requestedName: name,
+    userFound: !!user,
+    passwordHashPresent: !!user?.password_hash,
+  });
   // Deliberately identical error for "no such user" and "wrong password" —
   // distinguishing them would let someone probe which names have accounts.
   if (!user || !user.password_hash || !verifyPassword(password, user.password_hash)) {

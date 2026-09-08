@@ -55,12 +55,12 @@ import { Link } from "wouter";
 import { useRole } from "@/context/RoleContext";
 
 const STAGE_OPTIONS = [
-  { value: "prepared", label: "Prepared" },
   { value: "checked", label: "Checked" },
+  { value: "reviewed_purchase", label: "Reviewed by Purchase" },
   { value: "accounts_reviewed", label: "Reviewed by Accounts" },
-  { value: "reviewed_person1", label: "Reviewed by Person 1" },
-  { value: "reviewed_person2", label: "Reviewed by Person 2" },
-  { value: "reviewed_person3", label: "Reviewed by Person 3" },
+  { value: "reviewed_person1", label: "Reviewed by Operations" },
+  { value: "reviewed_person2", label: "Reviewed by Technical" },
+  { value: "reviewed_person3", label: "Reviewed by External" },
   { value: "reviewed_md", label: "Reviewed by MD" },
   { value: "reviewed_chairman", label: "Reviewed by Chairman" },
 ];
@@ -82,6 +82,8 @@ export default function RequisitionDetail() {
   const [assignOpen, setAssignOpen] = useState(false);
   const [statusUpdateOpen, setStatusUpdateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [priorityOpen, setPriorityOpen] = useState(false);
+  const [newPriority, setNewPriority] = useState("");
   const [approvalNoteOpen, setApprovalNoteOpen] = useState(false);
   const [completeOpen, setCompleteOpen] = useState(false);
   const [replyQueryId, setReplyQueryId] = useState<number | null>(null);
@@ -118,6 +120,46 @@ export default function RequisitionDetail() {
     queryClient.invalidateQueries({ queryKey: getGetAnalyticsSummaryQueryKey() });
   };
 
+  const changePriority = async () => {
+    if (!newPriority) return;
+
+    try {
+      const response = await fetch(`/api/requisitions/${id}/priority`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          priority: newPriority,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to change priority");
+      }
+
+      invalidate();
+      setPriorityOpen(false);
+      setNewPriority("");
+
+      toast({
+        title: "Priority updated",
+        description: `Priority changed to ${newPriority}.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to change priority.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const submitMut = useSubmitRequisition();
   const checker1Mut = useChecker1Review();
   const checker2Mut = useChecker2Review();
@@ -145,7 +187,7 @@ export default function RequisitionDetail() {
   const queryForm = useForm({ defaultValues: { message: "" } });
   const replyForm = useForm({ defaultValues: { message: "" } });
   const assignForm = useForm({ defaultValues: { assigned_to_id: "", assigned_to_name: "" } });
-  const statusForm = useForm({ defaultValues: { stage: "prepared", notes: "" } });
+  const statusForm = useForm({ defaultValues: { stage: "checked", notes: "" } });
   const [editItems, setEditItems] = useState<Array<{ tempId: string;id: number; item_name: string; quantity: string; unit: string; reference_no: string; expected_cost: string; description: string; remark: string; asset_id: string; asset_name: string }>>([]);
   const approvalNoteForm = useForm({ defaultValues: { note_number: "" } });
 
@@ -179,6 +221,9 @@ export default function RequisitionDetail() {
   const isPurchaseHead = user.role === "purchase_head";
   const canResume = isOnHold && (isPurchaseHead || req.checker1_id === user.id || req.checker2_id === user.id || req.approver_id === user.id);
   const isPurchaseMember = user.role === "purchase_member" && req.assigned_to_id === user.id;
+  const canPrintInProgress =
+    req.status === "in_progress" &&
+    isPurchaseMember;
   const canDownloadCsv =
     req.status === "completed" &&
     (user.role === "purchase_member" || user.role === "purchase_head");
@@ -436,6 +481,22 @@ export default function RequisitionDetail() {
             </Dialog>
           )}
 
+          {(req.status === "pending_approver" &&
+            (user.role === "purchase_head" ||
+              (user.role === "approver" && req.approver_id === user.id))) && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setNewPriority(req.priority);
+                setPriorityOpen(true);
+              }}
+              data-testid="button-change-priority"
+            >
+              Change Priority
+            </Button>
+          )}
+
           {canSubmit && (
             <Dialog open={submitOpen} onOpenChange={setSubmitOpen}>
               <DialogTrigger asChild>
@@ -543,7 +604,54 @@ export default function RequisitionDetail() {
               </DialogContent>
             </Dialog>
           )}
+<             Dialog open={priorityOpen} onOpenChange={setPriorityOpen}>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Change Priority</DialogTitle>
+                  </DialogHeader>
 
+                  <div className="space-y-4 mt-2">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Current Priority</p>
+                      <p className="font-medium capitalize mt-1">{req.priority}</p>
+                    </div>
+
+                    <div>
+                      <label className="text-sm font-medium">New Priority</label>
+
+                      <select
+                        value={newPriority}
+                        onChange={(e) => setNewPriority(e.target.value)}
+                        className="w-full mt-1 border rounded-md px-3 py-2 text-sm bg-background"
+                      >
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                        <option value="urgent">Urgent</option>
+                      </select>
+                    </div>
+
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setPriorityOpen(false);
+                          setNewPriority("");
+                        }}
+                      >
+                        Cancel
+                      </Button>
+
+                      <Button
+                        onClick={changePriority}
+                        disabled={!newPriority || newPriority === req.priority}
+                      >
+                        Save Priority
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
           {isApprover && (
             <>
               <Dialog open={approverOpen} onOpenChange={setApproverOpen}>
@@ -571,6 +679,8 @@ export default function RequisitionDetail() {
                   </div>
                 </DialogContent>
               </Dialog>
+
+              
 
               <Dialog open={holdOpen} onOpenChange={setHoldOpen}>
                 <DialogTrigger asChild>
@@ -614,6 +724,21 @@ export default function RequisitionDetail() {
               Download
             </Button>
           )}
+
+          {canPrintInProgress && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5"
+              onClick={() => {
+                window.location.href = `/api/requisitions/${id}/print`;
+              }}
+              data-testid="button-print-in-progress-requisition"
+            >
+              Print Requisition
+            </Button>
+          )}
+
           {isPurchaseHead && req.status === "approved" && (
             <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
               <DialogTrigger asChild>
@@ -906,7 +1031,7 @@ export default function RequisitionDetail() {
                   <div>
                     <p className="text-sm font-medium">{q.raised_by_name} <span className="text-xs text-muted-foreground">({q.raised_by_role})</span></p>
                     <p className="text-sm mt-1">{q.message}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{formatDateTime(q.created_at)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{formatStatusUpdateTime(q.created_at)}</p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {q.is_resolved ? (
@@ -930,7 +1055,7 @@ export default function RequisitionDetail() {
                       <div key={r.id} className="text-sm">
                         <span className="font-medium">{r.replied_by_name}</span> <span className="text-xs text-muted-foreground">({r.replied_by_role})</span>
                         <p className="mt-0.5">{r.message}</p>
-                        <p className="text-xs text-muted-foreground">{formatDateTime(r.created_at)}</p>
+                        <p className="text-xs text-muted-foreground">{formatStatusUpdateTime(r.created_at)}</p>
                         {r.attachments && r.attachments.length > 0 && (
                           <div className="flex flex-wrap gap-2 mt-1">
                             {r.attachments.map((a) => (
@@ -1038,7 +1163,7 @@ export default function RequisitionDetail() {
                   <div className="space-y-3 mt-2">
                     <div>
                       <label className="text-sm font-medium">Stage</label>
-                      <Select defaultValue="prepared" onValueChange={(v) => statusForm.setValue("stage", v)}>
+                      <Select defaultValue="checked" onValueChange={(v) => statusForm.setValue("stage", v)}>
                         <SelectTrigger data-testid="select-stage"><SelectValue /></SelectTrigger>
                         <SelectContent>{STAGE_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
                       </Select>
@@ -1051,7 +1176,7 @@ export default function RequisitionDetail() {
                     <Button className="w-full" disabled={statusUpdateMut.isPending} onClick={() => {
                       const vals = statusForm.getValues();
                       statusUpdateMut.mutate({ id, data: { updated_by_name: user.name, stage: vals.stage, notes: vals.notes } }, {
-                        onSuccess: () => { invalidate(); setStatusUpdateOpen(false); statusForm.reset({ stage: "prepared", notes: "" }); toast({ title: "Status updated" }); },
+                        onSuccess: () => { invalidate(); setStatusUpdateOpen(false); statusForm.reset({ stage: "checked", notes: "" }); toast({ title: "Status updated" }); },
                       });
                     }} data-testid="button-submit-update">Submit Update</Button>
                   </div>
@@ -1067,7 +1192,11 @@ export default function RequisitionDetail() {
                   <div key={u.id} className="flex gap-3 items-start p-3 rounded-lg border">
                     <div className="w-2 h-2 rounded-full bg-primary mt-2 flex-shrink-0" />
                     <div>
-                      <p className="text-sm font-medium">{STAGE_OPTIONS.find(o => o.value === u.stage)?.label ?? u.stage}</p>
+                      <p className="text-sm font-medium">
+                        {u.stage === "prepared"
+                          ? "Approval Note"
+                          : STAGE_OPTIONS.find(o => o.value === u.stage)?.label ?? u.stage}
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         {u.updated_by_name} · {formatStatusUpdateTime(u.created_at)}
                       </p>

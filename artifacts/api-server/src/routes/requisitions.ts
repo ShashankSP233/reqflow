@@ -353,6 +353,76 @@ router.get("/requisitions/:id", async (req, res) => {
   });
 });
 
+// ── Approver Priority Update ─────────────────────────────────────────────────
+router.patch("/requisitions/:id/priority", async (req, res) => {
+  const id = Number(req.params.id);
+  const { priority } = req.body;
+
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid requisition ID." });
+    return;
+  }
+
+  const allowedPriorities = ["low", "medium", "high", "urgent"];
+
+  if (!allowedPriorities.includes(priority)) {
+    res.status(400).json({
+      error: "Invalid priority. Use low, medium, high, or urgent.",
+    });
+    return;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(requisitionsTable)
+    .where(eq(requisitionsTable.id, id));
+
+  if (!existing) {
+    res.status(404).json({ error: "Requisition not found." });
+    return;
+  }
+
+  const user = req.currentUser;
+
+  // Only the approver assigned to this requisition can change priority.
+  if (
+    !user ||
+    !(
+      user.role === "purchase_head" ||
+      (user.role === "approver" && existing.approver_id === user.id)
+    )
+  ) {
+    res.status(403).json({
+      error: "Only the assigned approver can change requisition priority.",
+    });
+    return;
+  }
+
+  // Priority can only be changed while the requisition is with the approver.
+  if (existing.status !== "pending_approver") {
+    res.status(403).json({
+      error: "Priority can only be changed while the requisition is pending approval.",
+    });
+    return;
+  }
+
+  const [updated] = await db
+    .update(requisitionsTable)
+    .set({
+      priority,
+      updated_at: new Date(),
+    })
+    .where(eq(requisitionsTable.id, id))
+    .returning();
+
+  if (!updated) {
+    res.status(404).json({ error: "Requisition not found." });
+    return;
+  }
+
+  res.json(await enrichRequisition(updated as unknown as Record<string, unknown>));
+});
+
 // ── Update ────────────────────────────────────────────────────────────────────
 router.patch("/requisitions/:id", async (req, res) => {
   const id = Number(req.params.id);
@@ -480,6 +550,101 @@ router.patch("/requisitions/:id/items/:itemId", async (req, res) => {
 router.delete("/requisitions/:id/items/:itemId", async (req, res) => {
   await db.delete(requisitionItemsTable).where(eq(requisitionItemsTable.id, Number(req.params.itemId)));
   res.status(204).send();
+});
+
+// ── Purchase Member In-Progress Requisition Print ─────────────────────────────
+router.get("/requisitions/:id/print", async (req, res) => {
+  const user = req.currentUser;
+
+  // Only Purchase Members can print in-progress requisitions,
+  // and only when the requisition is assigned to that member.
+  if (!user || user.role !== "purchase_member") {
+    res.status(403).json({
+      error: "Only the assigned purchase member can print this requisition.",
+    });
+    return;
+  }
+
+  const id = Number(req.params.id);
+
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid requisition ID." });
+    return;
+  }
+
+  // Fetch the requisition.
+  const rows = await db
+    .select(baseSelect)
+    .from(requisitionsTable)
+    .leftJoin(projectsTable, eq(requisitionsTable.project_id, projectsTable.id))
+    .where(eq(requisitionsTable.id, id))
+    .limit(1);
+
+  const requisition = rows[0];
+
+  if (!requisition) {
+    res.status(404).json({ error: "Requisition not found." });
+    return;
+  }
+
+  // This print is only available while the requisition is in progress.
+  if (requisition.status !== "in_progress") {
+    res.status(403).json({
+      error: "Only in-progress requisitions can be printed.",
+    });
+    return;
+  }
+
+  // The Purchase Member must actually be assigned to this requisition.
+  if (requisition.assigned_to_id !== user.id) {
+    res.status(403).json({
+      error: "Only the assigned purchase member can print this requisition.",
+    });
+    return;
+  }
+
+  const items = await db
+    .select()
+    .from(requisitionItemsTable)
+    .where(eq(requisitionItemsTable.requisition_id, id))
+    .orderBy(requisitionItemsTable.sort_order);
+
+  const r = requisition as Record<string, unknown>;
+
+  const csv = [
+    "\uFEFF" +
+      [
+        "REQUISITION",
+        csvRow(["Requisition No.", r.ref_number]),
+        csvRow(["Raised By", r.raised_by_name]),
+        csvRow(["Date", r.requisition_date]),
+        csvRow([])
+      ].join("\r\n"),
+
+
+    csvSection(
+      "ITEMS",
+      ["Name","Description", "Vessel", "Qty", "Units", "Remark"],
+      items.map(item => [
+        item.item_name,
+        item.description,
+        item.asset_name,
+        Number(item.quantity),
+        item.unit,
+        item.remark,
+      ]),
+    ),
+  ].join("\r\n");
+
+  const filename = `${String(r.ref_number || `REQ-${id}`)}_Purchase_Requisition.csv`;
+
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="${filename}"`,
+  );
+
+  res.send(csv);
 });
 
 // ── Completed Requisition PDF Download ────────────────────────────────────────
