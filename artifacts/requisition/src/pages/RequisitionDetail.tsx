@@ -221,6 +221,7 @@ export default function RequisitionDetail() {
   const isPurchaseHead = user.role === "purchase_head";
   const canResume = isOnHold && (isPurchaseHead || req.checker1_id === user.id || req.checker2_id === user.id || req.approver_id === user.id);
   const isPurchaseMember = user.role === "purchase_member" && req.assigned_to_id === user.id;
+  const canAddStatusUpdate = user.role === "purchase_member";
   const canPrintInProgress =
     req.status === "in_progress" &&
     isPurchaseMember;
@@ -855,9 +856,7 @@ export default function RequisitionDetail() {
           <TabsTrigger value="workflow">Workflow</TabsTrigger>
           <TabsTrigger value="queries">Queries ({req.queries?.length ?? 0})</TabsTrigger>
           <TabsTrigger value="attachments">Attachments ({req.attachments?.length ?? 0})</TabsTrigger>
-          {(req.status === "in_progress" || req.status === "completed") && (
-            <TabsTrigger value="updates">Status Updates</TabsTrigger>
-          )}
+          <TabsTrigger value="updates">Status Updates</TabsTrigger>
         </TabsList>
 
         {/* Details Tab */}
@@ -1139,7 +1138,7 @@ export default function RequisitionDetail() {
                     <Paperclip className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                     <div className="min-w-0">
                       <a href={att.url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium hover:underline text-primary truncate block">{att.original_name}</a>
-                      <p className="text-xs text-muted-foreground">{att.uploaded_by_name} · {formatDateTime(att.uploaded_at)} · {att.size_bytes ? `${Math.round(att.size_bytes / 1024)} KB` : ""}</p>
+                      <p className="text-xs text-muted-foreground">{att.uploaded_by_name} · {formatStatusUpdateTime(att.uploaded_at)} · {att.size_bytes ? `${Math.round(att.size_bytes / 1024)} KB` : ""}</p>
                     </div>
                   </div>
                 </div>
@@ -1149,65 +1148,135 @@ export default function RequisitionDetail() {
         </TabsContent>
 
         {/* Status Updates Tab */}
-        {(req.status === "in_progress" || req.status === "completed") && (
-          <TabsContent value="updates" className="mt-4 space-y-3">
-            {isPurchaseMember && (
-              <Dialog open={statusUpdateOpen} onOpenChange={setStatusUpdateOpen}>
-                <DialogTrigger asChild>
-                  <Button size="sm" variant="outline" className="gap-2" data-testid="button-add-update">
-                    <ClipboardList className="w-4 h-4" />Add Status Update
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader><DialogTitle>Daily Status Update</DialogTitle></DialogHeader>
-                  <div className="space-y-3 mt-2">
-                    <div>
-                      <label className="text-sm font-medium">Stage</label>
-                      <Select defaultValue="checked" onValueChange={(v) => statusForm.setValue("stage", v)}>
-                        <SelectTrigger data-testid="select-stage"><SelectValue /></SelectTrigger>
-                        <SelectContent>{STAGE_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium">Notes</label>
-                      <Textarea placeholder="What was done today..." rows={3} {...statusForm.register("notes")} data-testid="input-update-notes" />
-                    </div>
-                    <p className="text-xs text-muted-foreground">Recorded against today's date automatically — this can't be backdated (point 14).</p>
-                    <Button className="w-full" disabled={statusUpdateMut.isPending} onClick={() => {
-                      const vals = statusForm.getValues();
-                      statusUpdateMut.mutate({ id, data: { updated_by_name: user.name, stage: vals.stage, notes: vals.notes } }, {
-                        onSuccess: () => { invalidate(); setStatusUpdateOpen(false); statusForm.reset({ stage: "checked", notes: "" }); toast({ title: "Status updated" }); },
-                      });
-                    }} data-testid="button-submit-update">Submit Update</Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            )}
+        <TabsContent value="updates" className="mt-4 space-y-3">
+          {canAddStatusUpdate && (
+            <Dialog open={statusUpdateOpen} onOpenChange={setStatusUpdateOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-2"
+                  data-testid="button-add-update"
+                >
+                  <ClipboardList className="w-4 h-4" />
+                  Add Status Update
+                </Button>
+              </DialogTrigger>
 
-            {!req.status_updates?.length ? (
-              <div className="text-center py-10 text-muted-foreground text-sm border rounded-lg">No status updates yet.</div>
-            ) : (
-              <div className="space-y-2">
-                {req.status_updates.map((u) => (
-                  <div key={u.id} className="flex gap-3 items-start p-3 rounded-lg border">
-                    <div className="w-2 h-2 rounded-full bg-primary mt-2 flex-shrink-0" />
-                    <div>
-                      <p className="text-sm font-medium">
-                        {u.stage === "prepared"
-                          ? "Approval Note"
-                          : STAGE_OPTIONS.find(o => o.value === u.stage)?.label ?? u.stage}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {u.updated_by_name} · {formatStatusUpdateTime(u.created_at)}
-                      </p>
-                      {u.notes && <p className="text-sm text-muted-foreground mt-1">{u.notes}</p>}
-                    </div>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Daily Status Update</DialogTitle>
+                </DialogHeader>
+
+                <div className="space-y-3 mt-2">
+                  <div>
+                    <label className="text-sm font-medium">Stage</label>
+
+                    <Select
+                      defaultValue="checked"
+                      onValueChange={(v) => statusForm.setValue("stage", v)}
+                    >
+                      <SelectTrigger data-testid="select-stage">
+                        <SelectValue />
+                      </SelectTrigger>
+
+                      <SelectContent>
+                        {STAGE_OPTIONS.map((o) => (
+                          <SelectItem key={o.value} value={o.value}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                ))}
-              </div>
-            )}
-          </TabsContent>
-        )}
+
+                  <div>
+                    <label className="text-sm font-medium">Notes</label>
+
+                    <Textarea
+                      placeholder="What was done today..."
+                      rows={3}
+                      {...statusForm.register("notes")}
+                      data-testid="input-update-notes"
+                    />
+                  </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    Recorded against today's date automatically — this can't be
+                    backdated (point 14).
+                  </p>
+
+                  <Button
+                    className="w-full"
+                    disabled={statusUpdateMut.isPending}
+                    onClick={() => {
+                      const vals = statusForm.getValues();
+
+                      statusUpdateMut.mutate(
+                        {
+                          id,
+                          data: {
+                            updated_by_name: user.name,
+                            stage: vals.stage,
+                            notes: vals.notes,
+                          },
+                        },
+                        {
+                          onSuccess: () => {
+                            invalidate();
+                            setStatusUpdateOpen(false);
+                            statusForm.reset({
+                              stage: "checked",
+                              notes: "",
+                            });
+                            toast({ title: "Status updated" });
+                          },
+                        }
+                      );
+                    }}
+                    data-testid="button-submit-update"
+                  >
+                    Submit Update
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          )}
+
+          {!req.status_updates?.length ? (
+            <div className="text-center py-10 text-muted-foreground text-sm border rounded-lg">
+              No status updates yet.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {req.status_updates.map((u) => (
+                <div
+                  key={u.id}
+                  className="flex gap-3 items-start p-3 rounded-lg border"
+                >
+                  <div className="w-2 h-2 rounded-full bg-primary mt-2 flex-shrink-0" />
+
+                  <div>
+                    <p className="text-sm font-medium">
+                      {STAGE_OPTIONS.find((o) => o.value === u.stage)?.label ??
+                        u.stage}
+                    </p>
+
+                    <p className="text-xs text-muted-foreground">
+                      {u.updated_by_name} · {formatDateTime(u.created_at)}
+                    </p>
+
+                    {u.notes && (
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {u.notes}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </TabsContent>
       </Tabs>
     </div>
   );
