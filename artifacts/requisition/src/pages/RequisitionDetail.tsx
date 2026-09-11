@@ -350,7 +350,8 @@ export default function RequisitionDetail() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
   
-  const formatStatusUpdateTime = (value: string) => {
+  const formatStatusUpdateTime = (value: string | undefined) => {
+    if (!value) return "Unknown time";
     const date = new Date(value);
     date.setMinutes(date.getMinutes() - 330);
 
