@@ -41,6 +41,7 @@ import type {
   LoginBody,
   OnHoldItem,
   OverdueStatusUpdate,
+  PartialCloseInput,
   Project,
   ProjectInput,
   ProjectStats,
@@ -2336,6 +2337,72 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getCompleteRequisitionMutationOptions(options));
+    }
+
+export const getPartialCloseRequisitionUrl = (id: number,) => {
+
+
+
+
+  return `/api/requisitions/${id}/partial-close`
+}
+
+export const partialCloseRequisition = async (id: number,
+    partialCloseInput: PartialCloseInput, options?: Parameters<typeof customFetch>[1]): Promise<Requisition> => {
+
+  return customFetch<Requisition>(getPartialCloseRequisitionUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(partialCloseInput)
+  }
+);}
+
+
+
+
+
+export const getPartialCloseRequisitionMutationOptions = <TError = void,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof partialCloseRequisition>>, TError,{id: number;data: PartialCloseInput}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof partialCloseRequisition>>, TError,{id: number;data: PartialCloseInput}, TContext> => {
+
+const mutationKey = ['partialCloseRequisition'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof partialCloseRequisition>>, {id: number;data: PartialCloseInput}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  partialCloseRequisition(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PartialCloseRequisitionMutationResult = NonNullable<Awaited<ReturnType<typeof partialCloseRequisition>>>
+    export type PartialCloseRequisitionMutationBody = PartialCloseInput
+    export type PartialCloseRequisitionMutationError = void
+
+    export const usePartialCloseRequisition = <TError = void,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof partialCloseRequisition>>, TError,{id: number;data: PartialCloseInput}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof partialCloseRequisition>>,
+        TError,
+        {id: number;data: PartialCloseInput},
+        TContext
+      > => {
+      return useMutation(getPartialCloseRequisitionMutationOptions(options));
     }
 
 export const getListApprovalNotesUrl = (id: number,) => {

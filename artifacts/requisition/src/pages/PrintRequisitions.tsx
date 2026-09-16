@@ -24,7 +24,6 @@ import {
   Printer,
   RefreshCw,
 } from "lucide-react";
-import JSZip from "jszip";
 
 export default function PrintRequisitions() {
   const { user } = useRole();
@@ -87,28 +86,223 @@ export default function PrintRequisitions() {
     });
   };
 
-  const extractFilename = (
-    contentDisposition: string | null,
-    fallback: string,
-  ) => {
-    if (!contentDisposition) {
-      return fallback;
+  /*
+   * Parse one CSV line while correctly handling:
+   *   - commas inside quoted values
+   *   - escaped quotes ("")
+   */
+  const parseCsvLine = (line: string): string[] => {
+    const values: string[] = [];
+    let current = "";
+    let insideQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+
+      if (char === '"') {
+        if (insideQuotes && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          insideQuotes = !insideQuotes;
+        }
+      } else if (char === "," && !insideQuotes) {
+        values.push(current);
+        current = "";
+      } else {
+        current += char;
+      }
+    }
+
+    values.push(current);
+
+    return values;
+  };
+
+  /*
+   * Escape values before writing them into the combined CSV.
+   */
+  const escapeCsvValue = (value: string): string => {
+    if (
+      value.includes('"') ||
+      value.includes(",") ||
+      value.includes("\n") ||
+      value.includes("\r")
+    ) {
+      return `"${value.replace(/"/g, '""')}"`;
+    }
+
+    return value;
+  };
+
+  /*
+   * Extract only the ITEMS table from the CSV returned by
+   * /api/requisitions/:id/print.
+   *
+   * Expected source structure:
+   *
+   * REQUISITION:
+   * ...
+   *
+   * ITEMS:
+   * Name,Description,Vessel,Qty,Units,Remark
+   * ...
+   */
+  const extractItems = (csv: string): string[][] => {
+  const lines = csv
+    .replace(/^\uFEFF/, "")
+    .split(/\r?\n/);
+
+  /*
+   * Find the ITEMS section.
+   *
+   * Handles:
+   *   ITEMS:
+   *   ITEMS
+   *   Items:
+   */
+  const itemsSectionIndex = lines.findIndex((line) => {
+    const normalized = line
+      .trim()
+      .replace(/:$/, "")
+      .trim()
+      .toUpperCase();
+
+    return normalized === "ITEMS";
+  });
+
+  if (itemsSectionIndex === -1) {
+    console.error("ITEMS section not found in print CSV:", csv);
+    return [];
+  }
+
+  /*
+   * Find the actual item-table header after ITEMS.
+   *
+   * We look for the expected "Name" column instead of assuming
+   * it is immediately on the next line.
+   */
+  let headerIndex = -1;
+
+  for (
+    let i = itemsSectionIndex + 1;
+    i < lines.length;
+    i++
+  ) {
+    if (!lines[i]?.trim()) {
+      continue;
+    }
+
+    const headers = parseCsvLine(lines[i]).map((header) =>
+      header.trim().toLowerCase(),
+    );
+
+    if (headers.includes("name")) {
+      headerIndex = i;
+      break;
     }
 
     /*
-     * Handles:
-     *
-     * Content-Disposition:
-     * attachment; filename="REQ-001_Purchase_Requisition.csv"
+     * If another section starts before the item header,
+     * there is no usable ITEMS table.
      */
-    const match = contentDisposition.match(/filename="([^"]+)"/i);
+    const normalizedLine = lines[i]
+      .trim()
+      .replace(/:$/, "")
+      .trim()
+      .toUpperCase();
 
-    if (match?.[1]) {
-      return match[1];
+    if (
+      normalizedLine === "REQUISITION" ||
+      normalizedLine === "ITEMS"
+    ) {
+      break;
+    }
+  }
+
+  if (headerIndex === -1) {
+    console.error(
+      "ITEMS table header not found in print CSV:",
+      csv,
+    );
+    return [];
+  }
+
+  const headers = parseCsvLine(lines[headerIndex]).map((header) =>
+    header.trim().toLowerCase(),
+  );
+
+  const nameIndex = headers.indexOf("name");
+  const descriptionIndex = headers.indexOf("description");
+  const vesselIndex = headers.indexOf("vessel");
+  const qtyIndex = headers.indexOf("qty");
+  const unitsIndex = headers.indexOf("units");
+  const remarkIndex = headers.indexOf("remark");
+
+  if (nameIndex === -1) {
+    return [];
+  }
+
+  const rows: string[][] = [];
+
+  for (let i = headerIndex + 1; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (!line.trim()) {
+      continue;
     }
 
-    return fallback;
-  };
+    const values = parseCsvLine(line);
+
+    /*
+     * Stop when another named CSV section begins.
+     */
+    const normalizedLine = line
+      .trim()
+      .replace(/:$/, "")
+      .trim()
+      .toUpperCase();
+
+    if (
+      normalizedLine === "REQUISITION" ||
+      normalizedLine === "ITEMS"
+    ) {
+      break;
+    }
+
+    /*
+     * Ignore malformed/empty rows.
+     */
+    if (!values.some((value) => value.trim() !== "")) {
+      continue;
+    }
+
+    rows.push([
+      values[nameIndex] ?? "",
+      descriptionIndex >= 0
+        ? values[descriptionIndex] ?? ""
+        : "",
+      vesselIndex >= 0
+        ? values[vesselIndex] ?? ""
+        : "",
+      qtyIndex >= 0
+        ? values[qtyIndex] ?? ""
+        : "",
+      unitsIndex >= 0
+        ? values[unitsIndex] ?? ""
+        : "",
+      remarkIndex >= 0
+        ? values[remarkIndex] ?? ""
+        : "",
+    ]);
+  }
+
+  console.log(
+    `Extracted ${rows.length} items from print CSV`,
+  );
+
+  return rows;
+};
 
   const exportSelected = async () => {
     if (!selectedIds.size) {
@@ -123,26 +317,24 @@ export default function PrintRequisitions() {
     setIsExporting(true);
 
     try {
-      const zip = new JSZip();
-
       const ids = Array.from(selectedIds);
 
       /*
-       * Reuse the existing individual print endpoint.
+       * Fetch the existing individual print CSV for every
+       * selected requisition.
        *
-       * Every request therefore goes through the existing backend
-       * permission checks:
-       *
-       *   - current user must be purchase_member
-       *   - requisition must be in_progress
-       *   - requisition must be assigned to current user
+       * The existing backend endpoint continues to perform
+       * all authorization checks.
        */
       const results = await Promise.all(
         ids.map(async (id) => {
-          const response = await fetch(`/api/requisitions/${id}/print`, {
-            method: "GET",
-            credentials: "include",
-          });
+          const response = await fetch(
+            `/api/requisitions/${id}/print`,
+            {
+              method: "GET",
+              credentials: "include",
+            },
+          );
 
           if (!response.ok) {
             let message = `Failed to export requisition ${id}.`;
@@ -162,52 +354,60 @@ export default function PrintRequisitions() {
 
           const csv = await response.text();
 
-          const fallbackReq = requisitions?.find(
-            (req) => req.id === id,
-          );
-
-          const fallbackFilename = `${
-            fallbackReq?.ref_number ?? `REQ-${id}`
-          }_Purchase_Requisition.csv`;
-
-          const filename = extractFilename(
-            response.headers.get("content-disposition"),
-            fallbackFilename,
-          );
-
-          return {
-            filename,
-            csv,
-          };
+          return extractItems(csv);
         }),
       );
 
       /*
-       * Add every CSV returned by the existing /print endpoint
-       * into the ZIP.
+       * Combine all item rows from all selected requisitions.
        */
-      for (const result of results) {
-        zip.file(result.filename, result.csv);
+      const allItems = results.flat();
+
+      if (!allItems.length) {
+        throw new Error(
+          "No items were found in the selected requisitions.",
+        );
       }
 
-      const zipBlob = await zip.generateAsync({
-        type: "blob",
-        compression: "DEFLATE",
-        compressionOptions: {
-          level: 6,
-        },
-      });
+      /*
+       * One single header for the entire CSV.
+       */
+      const header = [
+        "Name",
+        "Description",
+        "Vessel",
+        "Qty",
+        "Units",
+        "Remark",
+      ];
+
+      const csvRows = [
+        header.map(escapeCsvValue).join(","),
+        ...allItems.map((row) =>
+          row.map(escapeCsvValue).join(","),
+        ),
+      ];
 
       /*
-       * Trigger the browser download.
+       * UTF-8 BOM helps Excel correctly recognize the CSV
+       * encoding when opened directly.
        */
-      const url = URL.createObjectURL(zipBlob);
+      const csvContent =
+        "\uFEFF" + csvRows.join("\r\n");
+
+      const blob = new Blob([csvContent], {
+        type: "text/csv;charset=utf-8;",
+      });
+
+      const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
 
-      const today = new Date().toISOString().slice(0, 10);
+      const today = new Date()
+        .toISOString()
+        .slice(0, 10);
 
       link.href = url;
-      link.download = `ReqFlow_Print_${today}.zip`;
+      link.download = `ReqFlow_Purchase_Items_${today}.csv`;
 
       document.body.appendChild(link);
       link.click();
@@ -217,14 +417,19 @@ export default function PrintRequisitions() {
 
       toast({
         title: "Export complete",
-        description: `${results.length} requisition${
-          results.length === 1 ? "" : "s"
-        } exported successfully.`,
+        description: `${allItems.length} item${
+          allItems.length === 1 ? "" : "s"
+        } exported from ${ids.length} requisition${
+          ids.length === 1 ? "" : "s"
+        }.`,
       });
 
       setSelectedIds(new Set());
     } catch (error) {
-      console.error("Batch requisition export failed:", error);
+      console.error(
+        "Combined requisition item export failed:",
+        error,
+      );
 
       toast({
         title: "Export failed",
@@ -262,14 +467,15 @@ export default function PrintRequisitions() {
         <div>
           <div className="flex items-center gap-2">
             <Printer className="w-5 h-5 text-primary" />
+
             <h1 className="text-2xl font-bold tracking-tight">
               Print Requisitions
             </h1>
           </div>
 
           <p className="text-muted-foreground text-sm mt-1">
-            Select multiple in-progress requisitions and export them as
-            individual CSV files in one ZIP.
+            Select multiple in-progress requisitions and
+            export all their items into one CSV.
           </p>
         </div>
 
@@ -325,7 +531,7 @@ export default function PrintRequisitions() {
               {isExporting ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Creating ZIP...
+                  Creating CSV...
                 </>
               ) : (
                 <>
@@ -359,11 +565,13 @@ export default function PrintRequisitions() {
                 {isLoading ? (
                   Array.from({ length: 5 }).map((_, index) => (
                     <TableRow key={index}>
-                      {Array.from({ length: 8 }).map((_, cellIndex) => (
-                        <TableCell key={cellIndex}>
-                          <Skeleton className="h-4 w-full" />
-                        </TableCell>
-                      ))}
+                      {Array.from({ length: 8 }).map(
+                        (_, cellIndex) => (
+                          <TableCell key={cellIndex}>
+                            <Skeleton className="h-4 w-full" />
+                          </TableCell>
+                        ),
+                      )}
                     </TableRow>
                   ))
                 ) : !requisitions?.length ? (
@@ -380,14 +588,16 @@ export default function PrintRequisitions() {
                         </p>
 
                         <p className="text-xs">
-                          Requisitions assigned to you will appear here.
+                          Requisitions assigned to you will
+                          appear here.
                         </p>
                       </div>
                     </TableCell>
                   </TableRow>
                 ) : (
                   requisitions.map((req) => {
-                    const isSelected = selectedIds.has(req.id);
+                    const isSelected =
+                      selectedIds.has(req.id);
 
                     return (
                       <TableRow
@@ -430,7 +640,9 @@ export default function PrintRequisitions() {
                         </TableCell>
 
                         <TableCell>
-                          <PriorityBadge priority={req.priority} />
+                          <PriorityBadge
+                            priority={req.priority}
+                          />
                         </TableCell>
 
                         <TableCell>
@@ -460,7 +672,8 @@ export default function PrintRequisitions() {
       {selectedIds.size > 0 && (
         <p className="text-xs text-muted-foreground text-right">
           {selectedIds.size} requisition
-          {selectedIds.size === 1 ? "" : "s"} selected for export
+          {selectedIds.size === 1 ? "" : "s"} selected
+          for export
         </p>
       )}
     </div>

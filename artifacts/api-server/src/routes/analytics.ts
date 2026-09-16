@@ -23,7 +23,7 @@ router.get("/analytics/summary", async (_req, res) => {
     .where(sql`approved_at IS NOT NULL`);
 
   const totalCostRow = await db
-    .select({ total: sql<number>`COALESCE(SUM(ri.expected_cost), 0)::float` })
+    .select({ total: sql<number>`COALESCE(SUM(CASE WHEN ri.expected_cost_is_unit IS TRUE THEN ri.quantity * ri.expected_cost ELSE ri.expected_cost END), 0)::float` })
     .from(sql`requisition_items ri`);
 
   const counts: Record<string, number> = {};
@@ -111,7 +111,7 @@ router.get("/analytics/by-site", async (_req, res) => {
     .select({
       site_name: sql<string>`COALESCE(${requisitionsTable.site_name}, 'Unspecified')`,
       count: sql<number>`COUNT(*)::int`,
-      total_expected: sql<number>`COALESCE((SELECT SUM(ri.expected_cost) FROM requisition_items ri WHERE ri.requisition_id = ${requisitionsTable.id}), 0)::float`,
+      total_expected: sql<number>`COALESCE((SELECT SUM(CASE WHEN ri.expected_cost_is_unit IS TRUE THEN ri.quantity * ri.expected_cost ELSE ri.expected_cost END) FROM requisition_items ri WHERE ri.requisition_id = ${requisitionsTable.id}), 0)::float`,
     })
     .from(requisitionsTable)
     .groupBy(requisitionsTable.site_name)

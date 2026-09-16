@@ -391,13 +391,14 @@ export default function CreateRequisition() {
 
                     <FormField control={form.control} name={`items.${index}.expected_cost`} render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Expected Cost <span className="text-muted-foreground font-normal">— benchmark, optional (₹)</span></FormLabel>
+                        <FormLabel>Expected Cost per Unit (₹)</FormLabel>
                         <FormControl>
                           <div className="relative">
                             <IndianRupee className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                            <Input type="number" step="0.01" min="0" className="pl-8" placeholder="Benchmark cost" {...field} value={field.value ?? ""} onChange={e => field.onChange(e.target.value ? Number(e.target.value) : undefined)} data-testid={`input-cost-${index}`} />
+                            <Input type="number" step="0.01" min="0" className="pl-8" placeholder="Cost of one unit" {...field} value={field.value ?? ""} onChange={e => field.onChange(e.target.value ? Number(e.target.value) : undefined)} data-testid={`input-cost-${index}`} />
                           </div>
                         </FormControl>
+                        <p className="text-xs text-muted-foreground">Enter the expected cost of one unit. Total is calculated automatically.</p>
                       </FormItem>
                     )} />
 

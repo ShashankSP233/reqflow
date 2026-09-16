@@ -367,6 +367,8 @@ export const GetRequisitionResponse = zod.object({
   "unit": zod.string().nullish(),
   "reference_no": zod.string().nullish(),
   "expected_cost": zod.number().nullish(),
+  "expected_cost_is_unit": zod.boolean().nullish(),
+  "line_total": zod.number().nullish(),
   "description": zod.string().nullish(),
   "remark": zod.string().nullish(),
   "asset_id": zod.int().nullish(),
@@ -384,7 +386,10 @@ export const GetRequisitionResponse = zod.object({
   "size_bytes": zod.int().nullish(),
   "uploaded_by_name": zod.string().nullish(),
   "uploaded_at": zod.string().optional(),
-  "url": zod.string().optional()
+  "url": zod.string().optional(),
+  "inherited": zod.boolean().optional(),
+  "source_requisition_id": zod.int().optional(),
+  "source_ref_number": zod.string().nullish()
 })).optional(),
   "queries": zod.array(zod.object({
   "id": zod.int(),
@@ -396,6 +401,9 @@ export const GetRequisitionResponse = zod.object({
   "resolved_by_name": zod.string().nullish(),
   "resolved_at": zod.string().nullish(),
   "created_at": zod.string(),
+  "inherited": zod.boolean().optional(),
+  "source_requisition_id": zod.int().optional(),
+  "source_ref_number": zod.string().nullish(),
   "replies": zod.array(zod.object({
   "id": zod.int(),
   "query_id": zod.int(),
@@ -414,7 +422,10 @@ export const GetRequisitionResponse = zod.object({
   "size_bytes": zod.int().nullish(),
   "uploaded_by_name": zod.string().nullish(),
   "uploaded_at": zod.string().optional(),
-  "url": zod.string().optional()
+  "url": zod.string().optional(),
+  "inherited": zod.boolean().optional(),
+  "source_requisition_id": zod.int().optional(),
+  "source_ref_number": zod.string().nullish()
 })).optional()
 })).optional(),
   "attachments": zod.array(zod.object({
@@ -428,7 +439,10 @@ export const GetRequisitionResponse = zod.object({
   "size_bytes": zod.int().nullish(),
   "uploaded_by_name": zod.string().nullish(),
   "uploaded_at": zod.string().optional(),
-  "url": zod.string().optional()
+  "url": zod.string().optional(),
+  "inherited": zod.boolean().optional(),
+  "source_requisition_id": zod.int().optional(),
+  "source_ref_number": zod.string().nullish()
 })).optional()
 })).optional(),
   "status_updates": zod.array(zod.object({
@@ -438,13 +452,21 @@ export const GetRequisitionResponse = zod.object({
   "stage": zod.string(),
   "notes": zod.string().nullish(),
   "update_date": zod.string(),
-  "created_at": zod.string()
+  "created_at": zod.string(),
+  "inherited": zod.boolean().optional(),
+  "source_requisition_id": zod.int().optional(),
+  "source_ref_number": zod.string().nullish()
 })).optional(),
   "compliance": zod.union([zod.object({
   "last_activity_date": zod.string(),
   "business_days_overdue": zod.int(),
   "due_today": zod.boolean()
-}),zod.null()]).optional()
+}),zod.null()]).optional(),
+  "continuation": zod.string().nullish(),
+  "continuation_requisition_id": zod.int().nullish(),
+  "parent": zod.string().nullish(),
+  "parent_requisition_id": zod.int().nullish(),
+  "is_continuation": zod.boolean().optional()
 }))
 
 
@@ -529,6 +551,8 @@ export const ListRequisitionItemsResponseItem = zod.object({
   "unit": zod.string().nullish(),
   "reference_no": zod.string().nullish(),
   "expected_cost": zod.number().nullish(),
+  "expected_cost_is_unit": zod.boolean().nullish(),
+  "line_total": zod.number().nullish(),
   "description": zod.string().nullish(),
   "remark": zod.string().nullish(),
   "asset_id": zod.int().nullish(),
@@ -563,6 +587,8 @@ export const AddRequisitionItemResponse = zod.object({
   "unit": zod.string().nullish(),
   "reference_no": zod.string().nullish(),
   "expected_cost": zod.number().nullish(),
+  "expected_cost_is_unit": zod.boolean().nullish(),
+  "line_total": zod.number().nullish(),
   "description": zod.string().nullish(),
   "remark": zod.string().nullish(),
   "asset_id": zod.int().nullish(),
@@ -597,6 +623,8 @@ export const UpdateRequisitionItemResponse = zod.object({
   "unit": zod.string().nullish(),
   "reference_no": zod.string().nullish(),
   "expected_cost": zod.number().nullish(),
+  "expected_cost_is_unit": zod.boolean().nullish(),
+  "line_total": zod.number().nullish(),
   "description": zod.string().nullish(),
   "remark": zod.string().nullish(),
   "asset_id": zod.int().nullish(),
@@ -628,7 +656,10 @@ export const ListAttachmentsResponseItem = zod.object({
   "size_bytes": zod.int().nullish(),
   "uploaded_by_name": zod.string().nullish(),
   "uploaded_at": zod.string().optional(),
-  "url": zod.string().optional()
+  "url": zod.string().optional(),
+  "inherited": zod.boolean().optional(),
+  "source_requisition_id": zod.int().optional(),
+  "source_ref_number": zod.string().nullish()
 })
 export const ListAttachmentsResponse = zod.array(ListAttachmentsResponseItem)
 
@@ -1134,6 +1165,64 @@ export const CompleteRequisitionResponse = zod.object({
 })
 
 
+export const PartialCloseRequisitionParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+
+
+
+export const PartialCloseRequisitionBody = zod.object({
+  "fulfilled_item_ids": zod.array(zod.int()).min(1)
+})
+
+export const PartialCloseRequisitionResponse = zod.object({
+  "id": zod.int(),
+  "ref_number": zod.string(),
+  "project_id": zod.int().nullish(),
+  "project_name": zod.string().nullish(),
+  "site_id": zod.int().nullish(),
+  "site_name": zod.string().nullish(),
+  "raised_by_id": zod.int().nullish(),
+  "raised_by_name": zod.string(),
+  "requisition_date": zod.string(),
+  "priority": zod.string(),
+  "purpose": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "status": zod.string(),
+  "checker1_id": zod.int().nullish(),
+  "checker1_name": zod.string().nullish(),
+  "checker1_suggestion": zod.string().nullish(),
+  "checker1_reviewed_at": zod.string().nullish(),
+  "checker1_status": zod.string().nullish(),
+  "checker2_id": zod.int().nullish(),
+  "checker2_name": zod.string().nullish(),
+  "checker2_suggestion": zod.string().nullish(),
+  "checker2_reviewed_at": zod.string().nullish(),
+  "checker2_status": zod.string().nullish(),
+  "approver_id": zod.int().nullish(),
+  "approver_name": zod.string().nullish(),
+  "approver_suggestion": zod.string().nullish(),
+  "approver_reviewed_at": zod.string().nullish(),
+  "approver_status": zod.string().nullish(),
+  "hold_reason": zod.string().nullish(),
+  "held_at": zod.string().nullish(),
+  "pre_hold_status": zod.string().nullish(),
+  "purchase_head_id": zod.int().nullish(),
+  "purchase_head_name": zod.string().nullish(),
+  "assigned_to_id": zod.int().nullish(),
+  "assigned_to_name": zod.string().nullish(),
+  "assigned_at": zod.string().nullish(),
+  "submitted_at": zod.string().nullish(),
+  "approved_at": zod.string().nullish(),
+  "completed_at": zod.string().nullish(),
+  "created_at": zod.string(),
+  "updated_at": zod.string(),
+  "item_count": zod.int().nullish(),
+  "total_expected_cost": zod.number().nullish()
+})
+
+
 export const ListApprovalNotesParams = zod.object({
   "id": zod.coerce.number().int()
 })
@@ -1143,7 +1232,8 @@ export const ListApprovalNotesResponseItem = zod.object({
   "requisition_id": zod.int(),
   "note_number": zod.string(),
   "created_by_name": zod.string().nullish(),
-  "created_at": zod.string()
+  "created_at": zod.string(),
+  "inherited": zod.boolean().optional()
 })
 export const ListApprovalNotesResponse = zod.array(ListApprovalNotesResponseItem)
 
@@ -1161,7 +1251,8 @@ export const AddApprovalNoteResponse = zod.object({
   "requisition_id": zod.int(),
   "note_number": zod.string(),
   "created_by_name": zod.string().nullish(),
-  "created_at": zod.string()
+  "created_at": zod.string(),
+  "inherited": zod.boolean().optional()
 })
 
 
@@ -1194,6 +1285,9 @@ export const ListQueriesResponseItem = zod.object({
   "resolved_by_name": zod.string().nullish(),
   "resolved_at": zod.string().nullish(),
   "created_at": zod.string(),
+  "inherited": zod.boolean().optional(),
+  "source_requisition_id": zod.int().optional(),
+  "source_ref_number": zod.string().nullish(),
   "replies": zod.array(zod.object({
   "id": zod.int(),
   "query_id": zod.int(),
@@ -1212,7 +1306,10 @@ export const ListQueriesResponseItem = zod.object({
   "size_bytes": zod.int().nullish(),
   "uploaded_by_name": zod.string().nullish(),
   "uploaded_at": zod.string().optional(),
-  "url": zod.string().optional()
+  "url": zod.string().optional(),
+  "inherited": zod.boolean().optional(),
+  "source_requisition_id": zod.int().optional(),
+  "source_ref_number": zod.string().nullish()
 })).optional()
 })).optional(),
   "attachments": zod.array(zod.object({
@@ -1226,7 +1323,10 @@ export const ListQueriesResponseItem = zod.object({
   "size_bytes": zod.int().nullish(),
   "uploaded_by_name": zod.string().nullish(),
   "uploaded_at": zod.string().optional(),
-  "url": zod.string().optional()
+  "url": zod.string().optional(),
+  "inherited": zod.boolean().optional(),
+  "source_requisition_id": zod.int().optional(),
+  "source_ref_number": zod.string().nullish()
 })).optional()
 })
 export const ListQueriesResponse = zod.array(ListQueriesResponseItem)
@@ -1252,6 +1352,9 @@ export const RaiseQueryResponse = zod.object({
   "resolved_by_name": zod.string().nullish(),
   "resolved_at": zod.string().nullish(),
   "created_at": zod.string(),
+  "inherited": zod.boolean().optional(),
+  "source_requisition_id": zod.int().optional(),
+  "source_ref_number": zod.string().nullish(),
   "replies": zod.array(zod.object({
   "id": zod.int(),
   "query_id": zod.int(),
@@ -1270,7 +1373,10 @@ export const RaiseQueryResponse = zod.object({
   "size_bytes": zod.int().nullish(),
   "uploaded_by_name": zod.string().nullish(),
   "uploaded_at": zod.string().optional(),
-  "url": zod.string().optional()
+  "url": zod.string().optional(),
+  "inherited": zod.boolean().optional(),
+  "source_requisition_id": zod.int().optional(),
+  "source_ref_number": zod.string().nullish()
 })).optional()
 })).optional(),
   "attachments": zod.array(zod.object({
@@ -1284,7 +1390,10 @@ export const RaiseQueryResponse = zod.object({
   "size_bytes": zod.int().nullish(),
   "uploaded_by_name": zod.string().nullish(),
   "uploaded_at": zod.string().optional(),
-  "url": zod.string().optional()
+  "url": zod.string().optional(),
+  "inherited": zod.boolean().optional(),
+  "source_requisition_id": zod.int().optional(),
+  "source_ref_number": zod.string().nullish()
 })).optional()
 })
 
@@ -1317,7 +1426,10 @@ export const ReplyToQueryResponse = zod.object({
   "size_bytes": zod.int().nullish(),
   "uploaded_by_name": zod.string().nullish(),
   "uploaded_at": zod.string().optional(),
-  "url": zod.string().optional()
+  "url": zod.string().optional(),
+  "inherited": zod.boolean().optional(),
+  "source_requisition_id": zod.int().optional(),
+  "source_ref_number": zod.string().nullish()
 })).optional()
 })
 
@@ -1340,6 +1452,9 @@ export const ResolveQueryResponse = zod.object({
   "resolved_by_name": zod.string().nullish(),
   "resolved_at": zod.string().nullish(),
   "created_at": zod.string(),
+  "inherited": zod.boolean().optional(),
+  "source_requisition_id": zod.int().optional(),
+  "source_ref_number": zod.string().nullish(),
   "replies": zod.array(zod.object({
   "id": zod.int(),
   "query_id": zod.int(),
@@ -1358,7 +1473,10 @@ export const ResolveQueryResponse = zod.object({
   "size_bytes": zod.int().nullish(),
   "uploaded_by_name": zod.string().nullish(),
   "uploaded_at": zod.string().optional(),
-  "url": zod.string().optional()
+  "url": zod.string().optional(),
+  "inherited": zod.boolean().optional(),
+  "source_requisition_id": zod.int().optional(),
+  "source_ref_number": zod.string().nullish()
 })).optional()
 })).optional(),
   "attachments": zod.array(zod.object({
@@ -1372,7 +1490,10 @@ export const ResolveQueryResponse = zod.object({
   "size_bytes": zod.int().nullish(),
   "uploaded_by_name": zod.string().nullish(),
   "uploaded_at": zod.string().optional(),
-  "url": zod.string().optional()
+  "url": zod.string().optional(),
+  "inherited": zod.boolean().optional(),
+  "source_requisition_id": zod.int().optional(),
+  "source_ref_number": zod.string().nullish()
 })).optional()
 })
 
@@ -1388,7 +1509,10 @@ export const ListStatusUpdatesResponseItem = zod.object({
   "stage": zod.string(),
   "notes": zod.string().nullish(),
   "update_date": zod.string(),
-  "created_at": zod.string()
+  "created_at": zod.string(),
+  "inherited": zod.boolean().optional(),
+  "source_requisition_id": zod.int().optional(),
+  "source_ref_number": zod.string().nullish()
 })
 export const ListStatusUpdatesResponse = zod.array(ListStatusUpdatesResponseItem)
 
@@ -1411,7 +1535,10 @@ export const AddStatusUpdateResponse = zod.object({
   "stage": zod.string(),
   "notes": zod.string().nullish(),
   "update_date": zod.string(),
-  "created_at": zod.string()
+  "created_at": zod.string(),
+  "inherited": zod.boolean().optional(),
+  "source_requisition_id": zod.int().optional(),
+  "source_ref_number": zod.string().nullish()
 })
 
 

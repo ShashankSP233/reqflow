@@ -1,15 +1,30 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { statusUpdatesTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { statusUpdatesTable, requisitionPartialRelationsTable } from "@workspace/db";
+import { eq, inArray } from "drizzle-orm";
 import { todayIST } from "../lib/business-days";
 
 const router = Router();
 
+async function getRelationLineage(id: number) {
+  const lineage = [id];
+  let currentId = id;
+  while (true) {
+    const [relation] = await db.select({ parent_requisition_id: requisitionPartialRelationsTable.parent_requisition_id })
+      .from(requisitionPartialRelationsTable)
+      .where(eq(requisitionPartialRelationsTable.child_requisition_id, currentId)).limit(1);
+    if (!relation) break;
+    lineage.push(relation.parent_requisition_id);
+    currentId = relation.parent_requisition_id;
+  }
+  return lineage.reverse();
+}
+
 router.get("/requisitions/:id/status-updates", async (req, res) => {
   const id = Number(req.params.id);
-  const rows = await db.select().from(statusUpdatesTable).where(eq(statusUpdatesTable.requisition_id, id)).orderBy(statusUpdatesTable.created_at);
-  res.json(rows.map(r => ({ ...r, created_at: r.created_at.toISOString() })));
+  const lineageIds = await getRelationLineage(id);
+  const rows = await db.select().from(statusUpdatesTable).where(inArray(statusUpdatesTable.requisition_id, lineageIds)).orderBy(statusUpdatesTable.created_at);
+  res.json(rows.map(r => ({ ...r, inherited: r.requisition_id !== id, created_at: r.created_at.toISOString() })));
 });
 
 router.post("/requisitions/:id/status-updates", async (req, res) => {

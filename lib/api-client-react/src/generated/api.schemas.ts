@@ -188,6 +188,10 @@ export interface RequisitionItem {
   /** @nullable */
   expected_cost?: number | null;
   /** @nullable */
+  expected_cost_is_unit?: boolean | null;
+  /** @nullable */
+  line_total?: number | null;
+  /** @nullable */
   description?: string | null;
   /** @nullable */
   remark?: string | null;
@@ -214,6 +218,10 @@ export interface Attachment {
   uploaded_by_name?: string | null;
   uploaded_at?: string;
   url?: string;
+  inherited?: boolean;
+  source_requisition_id?: number;
+  /** @nullable */
+  source_ref_number?: string | null;
 }
 
 export interface QueryReplyObject {
@@ -240,6 +248,10 @@ export interface QueryWithReplies {
   /** @nullable */
   resolved_at?: string | null;
   created_at: string;
+  inherited?: boolean;
+  source_requisition_id?: number;
+  /** @nullable */
+  source_ref_number?: string | null;
   replies?: QueryReplyObject[];
   attachments?: Attachment[];
 }
@@ -253,6 +265,10 @@ export interface StatusUpdate {
   notes?: string | null;
   update_date: string;
   created_at: string;
+  inherited?: boolean;
+  source_requisition_id?: number;
+  /** @nullable */
+  source_ref_number?: string | null;
 }
 
 export interface ComplianceStatus {
@@ -267,6 +283,15 @@ export type RequisitionDetail = Requisition & ({
   queries?: QueryWithReplies[];
   status_updates?: StatusUpdate[];
   compliance?: ComplianceStatus | null;
+  /** @nullable */
+  continuation?: string | null;
+  /** @nullable */
+  continuation_requisition_id?: number | null;
+  /** @nullable */
+  parent?: string | null;
+  /** @nullable */
+  parent_requisition_id?: number | null;
+  is_continuation?: boolean;
 });
 
 export interface RequisitionItemInput {
@@ -361,6 +386,11 @@ export interface AssetInput {
   project_id?: number | null;
 }
 
+export interface PartialCloseInput {
+  /** @minItems 1 */
+  fulfilled_item_ids: number[];
+}
+
 export interface ApprovalNote {
   id: number;
   requisition_id: number;
@@ -368,6 +398,7 @@ export interface ApprovalNote {
   /** @nullable */
   created_by_name?: string | null;
   created_at: string;
+  inherited?: boolean;
 }
 
 export interface ApprovalNoteInput {

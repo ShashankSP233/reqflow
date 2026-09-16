@@ -6,6 +6,7 @@ export * from "./assets";
 export * from "./user_projects";
 export * from "./requisitions";
 export * from "./requisition_items";
+export * from "./requisition_partial_relations";
 export * from "./attachments";
 export * from "./queries";
 export * from "./status_updates";

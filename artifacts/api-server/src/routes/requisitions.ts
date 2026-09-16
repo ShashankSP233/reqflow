@@ -11,10 +11,10 @@ import { db } from "@workspace/db";
 import {
   requisitionsTable, requisitionItemsTable,
   projectsTable, sitesTable, attachmentsTable, queriesTable, queryRepliesTable, statusUpdatesTable,
-  approvalNotesTable,
+  approvalNotesTable, requisitionPartialRelationsTable, requisitionPartialRelationItemsTable,
   holidaysTable, userProjectsTable
 } from "@workspace/db";
-import { eq, and, sql, inArray, or } from "drizzle-orm";
+import { eq, and, sql, inArray, or, notInArray } from "drizzle-orm";
 import { computeCompliance, toDateOnlyIST, todayIST } from "../lib/business-days";
 import type { SessionUser } from "../lib/session-types";
 
@@ -79,10 +79,14 @@ function fmt(r: Record<string, unknown>) {
 }
 
 function fmtItem(item: Record<string, unknown>) {
+  const quantity = Number(item.quantity);
+  const expectedCost = item.expected_cost != null ? Number(item.expected_cost) : null;
+  const isUnitCost = item.expected_cost_is_unit === true;
   return {
     ...item,
-    quantity: Number(item.quantity),
-    expected_cost: item.expected_cost != null ? Number(item.expected_cost) : null,
+    quantity,
+    expected_cost: expectedCost,
+    line_total: expectedCost == null ? null : isUnitCost ? quantity * expectedCost : expectedCost,
   };
 }
 
@@ -114,18 +118,47 @@ function csvSection(title: string, headers: string[], rows: unknown[][]): string
 
 async function enrichRequisition(row: Record<string, unknown>) {
   const id = row.id as number;
-  const itemsAgg = await db
-    .select({
-      count: sql<number>`COUNT(*)::int`,
-      total: sql<number>`COALESCE(SUM(expected_cost), 0)::float`,
-    })
-    .from(requisitionItemsTable)
-    .where(eq(requisitionItemsTable.requisition_id, id));
+  const activeItems = await getActiveItems(id);
   return {
     ...fmt(row),
-    item_count: itemsAgg[0]?.count ?? 0,
-    total_expected_cost: itemsAgg[0]?.total ?? 0,
+    item_count: activeItems.length,
+    total_expected_cost: activeItems.reduce((total, item) => total + (item.expected_cost != null ? (item.expected_cost_is_unit === true ? Number(item.quantity) * Number(item.expected_cost) : Number(item.expected_cost)) : 0), 0),
   };
+}
+
+async function getRelationLineage(id: number) {
+  const lineage = [id];
+  let currentId = id;
+
+  while (true) {
+    const [relation] = await db
+      .select({ parent_requisition_id: requisitionPartialRelationsTable.parent_requisition_id })
+      .from(requisitionPartialRelationsTable)
+      .where(eq(requisitionPartialRelationsTable.child_requisition_id, currentId))
+      .limit(1);
+    if (!relation) break;
+    lineage.push(relation.parent_requisition_id);
+    currentId = relation.parent_requisition_id;
+  }
+
+  return lineage.reverse();
+}
+
+async function getActiveItems(id: number) {
+  const movedItemRows = await db
+    .select({ parent_item_id: requisitionPartialRelationItemsTable.parent_item_id })
+    .from(requisitionPartialRelationItemsTable)
+    .innerJoin(requisitionPartialRelationsTable, eq(requisitionPartialRelationItemsTable.relation_id, requisitionPartialRelationsTable.id))
+    .where(eq(requisitionPartialRelationsTable.parent_requisition_id, id));
+  const movedItemIds = movedItemRows.map(row => row.parent_item_id);
+
+  return db
+    .select()
+    .from(requisitionItemsTable)
+    .where(movedItemIds.length > 0
+      ? and(eq(requisitionItemsTable.requisition_id, id), notInArray(requisitionItemsTable.id, movedItemIds))
+      : eq(requisitionItemsTable.requisition_id, id))
+    .orderBy(requisitionItemsTable.sort_order);
 }
 
 const baseSelect = {
@@ -270,6 +303,7 @@ router.post("/requisitions", async (req, res) => {
         unit: (item.unit as string) ?? null,
         reference_no: (item.reference_no as string) ?? null,
         expected_cost: item.expected_cost != null ? String(item.expected_cost) : null,
+        expected_cost_is_unit: true,
         description: (item.description as string) ?? null,
         remark: (item.remark as string) ?? null,
         asset_id: (item.asset_id as number) ?? null,
@@ -302,13 +336,36 @@ router.get("/requisitions/:id", async (req, res) => {
     return;
   }
 
-  const items = await db.select().from(requisitionItemsTable).where(eq(requisitionItemsTable.requisition_id, id)).orderBy(requisitionItemsTable.sort_order);
-  const attachments = await db.select().from(attachmentsTable).where(and(eq(attachmentsTable.requisition_id, id), eq(attachmentsTable.context, "requisition")));
-  const queries = await db.select().from(queriesTable).where(eq(queriesTable.requisition_id, id)).orderBy(queriesTable.created_at);
+  const lineageIds = await getRelationLineage(id);
+  const lineageRows = await db
+    .select({ id: requisitionsTable.id, ref_number: requisitionsTable.ref_number })
+    .from(requisitionsTable)
+    .where(inArray(requisitionsTable.id, lineageIds));
+  const refsById = new Map(lineageRows.map(row => [row.id, row.ref_number]));
+  const items = await getActiveItems(id);
+  const attachments = await db.select().from(attachmentsTable).where(and(inArray(attachmentsTable.requisition_id, lineageIds), eq(attachmentsTable.context, "requisition")));
+  const queries = await db.select().from(queriesTable).where(inArray(queriesTable.requisition_id, lineageIds)).orderBy(queriesTable.created_at);
   const queryIds = queries.map(q => q.id);
   const replies = queryIds.length > 0 ? await db.select().from(queryRepliesTable).where(inArray(queryRepliesTable.query_id, queryIds)) : [];
   const replyAttachments = replies.length > 0 ? await db.select().from(attachmentsTable).where(and(eq(attachmentsTable.context, "query_reply"), inArray(attachmentsTable.context_id, replies.map(r => r.id)))) : [];
-  const statusUpdates = await db.select().from(statusUpdatesTable).where(eq(statusUpdatesTable.requisition_id, id)).orderBy(statusUpdatesTable.created_at);
+  const statusUpdates = await db.select().from(statusUpdatesTable).where(inArray(statusUpdatesTable.requisition_id, lineageIds)).orderBy(statusUpdatesTable.created_at);
+  const relation = await db
+    .select({
+      parent_id: requisitionPartialRelationsTable.parent_requisition_id,
+      child_id: requisitionPartialRelationsTable.child_requisition_id,
+      relation_type: requisitionPartialRelationsTable.relation_type,
+    })
+    .from(requisitionPartialRelationsTable)
+    .where(or(eq(requisitionPartialRelationsTable.parent_requisition_id, id), eq(requisitionPartialRelationsTable.child_requisition_id, id)))
+    .orderBy(requisitionPartialRelationsTable.created_at);
+  const relatedIds = Array.from(new Set(relation.flatMap(r => [r.parent_id, r.child_id])));
+  if (relatedIds.some(relatedId => !refsById.has(relatedId))) {
+    const relatedRows = await db
+      .select({ id: requisitionsTable.id, ref_number: requisitionsTable.ref_number })
+      .from(requisitionsTable)
+      .where(inArray(requisitionsTable.id, relatedIds));
+    for (const relatedRow of relatedRows) refsById.set(relatedRow.id, relatedRow.ref_number);
+  }
 
   let compliance = null;
   if (rows[0].status === "in_progress" && rows[0].assigned_at) {
@@ -329,6 +386,9 @@ router.get("/requisitions/:id", async (req, res) => {
 
   const queriesWithReplies = queries.map(q => ({
     ...q,
+    inherited: q.requisition_id !== id,
+    source_requisition_id: q.requisition_id,
+    source_ref_number: refsById.get(q.requisition_id) ?? null,
     created_at: q.created_at.toISOString(),
     resolved_at: q.resolved_at?.toISOString() ?? null,
     replies: replies
@@ -344,11 +404,16 @@ router.get("/requisitions/:id", async (req, res) => {
   res.json({
     ...fmt(rows[0] as Record<string, unknown>),
     item_count: items.length,
-    total_expected_cost: items.reduce((s, i) => s + (i.expected_cost != null ? Number(i.expected_cost) : 0), 0),
+    total_expected_cost: items.reduce((s, i) => s + (i.expected_cost != null ? (i.expected_cost_is_unit === true ? Number(i.quantity) * Number(i.expected_cost) : Number(i.expected_cost)) : 0), 0),
     items: items.map(i => fmtItem(i as unknown as Record<string, unknown>)),
-    attachments: attachments.map(fmtAttachment),
+    attachments: attachments.map(a => ({ ...fmtAttachment(a), inherited: a.requisition_id !== id, source_requisition_id: a.requisition_id, source_ref_number: refsById.get(a.requisition_id) ?? null })),
     queries: queriesWithReplies,
-    status_updates: statusUpdates.map(u => ({ ...u, created_at: u.created_at.toISOString() })),
+    status_updates: statusUpdates.map(u => ({ ...u, inherited: u.requisition_id !== id, source_requisition_id: u.requisition_id, source_ref_number: refsById.get(u.requisition_id) ?? null, created_at: u.created_at.toISOString() })),
+    continuation: relation.find(r => r.parent_id === id) ? refsById.get(relation.find(r => r.parent_id === id)!.child_id) ?? null : null,
+    continuation_requisition_id: relation.find(r => r.parent_id === id)?.child_id ?? null,
+    parent: relation.find(r => r.child_id === id) ? refsById.get(relation.find(r => r.child_id === id)!.parent_id) ?? null : null,
+    parent_requisition_id: relation.find(r => r.child_id === id)?.parent_id ?? null,
+    is_continuation: lineageIds.length > 1,
     compliance,
   });
 });
@@ -478,7 +543,7 @@ router.get("/item-names", async (_req, res) => {
 
 router.get("/requisitions/:id/items", async (req, res) => {
   const id = Number(req.params.id);
-  const items = await db.select().from(requisitionItemsTable).where(eq(requisitionItemsTable.requisition_id, id)).orderBy(requisitionItemsTable.sort_order);
+  const items = await getActiveItems(id);
   res.json(items.map(i => fmtItem(i as unknown as Record<string, unknown>)));
 });
 
@@ -510,6 +575,7 @@ router.post("/requisitions/:id/items", async (req, res) => {
     unit: unit ?? null,
     reference_no: reference_no ?? null,
     expected_cost: expected_cost != null ? String(expected_cost) : null,
+    expected_cost_is_unit: true,
     description: description ?? null,
     remark: remark ?? null,
     asset_id: asset_id ?? null,
@@ -603,11 +669,7 @@ router.get("/requisitions/:id/print", async (req, res) => {
     return;
   }
 
-  const items = await db
-    .select()
-    .from(requisitionItemsTable)
-    .where(eq(requisitionItemsTable.requisition_id, id))
-    .orderBy(requisitionItemsTable.sort_order);
+  const items = await getActiveItems(id);
 
   const r = requisition as Record<string, unknown>;
 
@@ -691,22 +753,19 @@ router.get("/requisitions/:id/download", async (req, res) => {
 
   // ── Fetch related data ─────────────────────────────────────────────────────
 
-  const items = await db
-    .select()
-    .from(requisitionItemsTable)
-    .where(eq(requisitionItemsTable.requisition_id, id))
-    .orderBy(requisitionItemsTable.id);
+  const lineageIds = await getRelationLineage(id);
+  const items = await getActiveItems(id);
 
   const attachments = await db
     .select()
     .from(attachmentsTable)
-    .where(eq(attachmentsTable.requisition_id, id))
+    .where(inArray(attachmentsTable.requisition_id, lineageIds))
     .orderBy(attachmentsTable.id);
 
   const queries = await db
     .select()
     .from(queriesTable)
-    .where(eq(queriesTable.requisition_id, id))
+    .where(inArray(queriesTable.requisition_id, lineageIds))
     .orderBy(queriesTable.id);
 
   const queryReplies = queries.length > 0
@@ -741,13 +800,13 @@ router.get("/requisitions/:id/download", async (req, res) => {
   const statusUpdates = await db
     .select()
     .from(statusUpdatesTable)
-    .where(eq(statusUpdatesTable.requisition_id, id))
+    .where(inArray(statusUpdatesTable.requisition_id, lineageIds))
     .orderBy(statusUpdatesTable.created_at);
 
   const approvalNotes = await db
     .select()
     .from(approvalNotesTable)
-    .where(eq(approvalNotesTable.requisition_id, id))
+    .where(inArray(approvalNotesTable.requisition_id, lineageIds))
     .orderBy(approvalNotesTable.id);
 
   const r = requisition as Record<string, unknown>;
@@ -929,22 +988,28 @@ const drawItemsTable = () => {
 
   const startX = doc.page.margins.left;
 
-  // Item Name | Description | Qty
-  const itemNameWidth = 150;
-  const qtyWidth = 70;
+  // Item Name | Description | Qty | Unit Cost | Line Total
+  const itemNameWidth = 125;
+  const qtyWidth = 55;
+  const unitCostWidth = 75;
+  const lineTotalWidth = 80;
   const descriptionWidth =
-    pageWidth - itemNameWidth - qtyWidth;
+    pageWidth - itemNameWidth - qtyWidth - unitCostWidth - lineTotalWidth;
 
   const headers = [
     "Item Name",
     "Description",
     "Qty",
+    "Unit Cost",
+    "Line Total",
   ];
 
   const widths = [
     itemNameWidth,
     descriptionWidth,
     qtyWidth,
+    unitCostWidth,
+    lineTotalWidth,
   ];
 
   const drawHeader = () => {
@@ -977,7 +1042,7 @@ const drawItemsTable = () => {
           {
             width: widths[i] - 10,
             height: 14,
-            align: i === 2 ? "center" : "left",
+            align: i >= 2 ? "right" : "left",
           },
         );
 
@@ -1002,6 +1067,12 @@ const drawItemsTable = () => {
       itemName,
       description,
       quantity,
+      item.expected_cost == null ? "—" : Number(item.expected_cost).toLocaleString("en-IN"),
+      item.expected_cost == null
+        ? "—"
+        : (item.expected_cost_is_unit === true
+          ? (Number(item.quantity) * Number(item.expected_cost)).toLocaleString("en-IN")
+          : Number(item.expected_cost).toLocaleString("en-IN")),
     ];
 
     doc.font("Helvetica")
@@ -1060,7 +1131,7 @@ const drawItemsTable = () => {
           {
             width: widths[i] - padding * 2,
             height: rowHeight - padding * 2,
-            align: i === 2 ? "center" : "left",
+            align: i >= 2 ? "right" : "left",
           },
         );
 
@@ -1261,13 +1332,15 @@ const drawItemsTable = () => {
       ["Created At", r.created_at],
       ["Updated At", r.updated_at],
       [
-        "Total Expected Cost",
+        "Total Estimate",
         items.reduce(
           (sum, item) =>
             sum +
             (
               item.expected_cost != null
-                ? Number(item.expected_cost)
+                ? item.expected_cost_is_unit === true
+                  ? Number(item.quantity) * Number(item.expected_cost)
+                  : Number(item.expected_cost)
                 : 0
             ),
           0,
@@ -1490,9 +1563,10 @@ const drawItemsTable = () => {
   // ── Attachments list ──────────────────────────────────────────────────────────
 router.get("/requisitions/:id/attachments", async (req, res) => {
   const id = Number(req.params.id);
+  const lineageIds = await getRelationLineage(id);
   const baseUrl = process.env.BASE_URL ?? "/api";
-  const atts = await db.select().from(attachmentsTable).where(eq(attachmentsTable.requisition_id, id));
-  res.json(atts.map(a => ({ ...a, uploaded_at: a.uploaded_at.toISOString(), url: `${baseUrl}/files/${a.filename}` })));
+  const atts = await db.select().from(attachmentsTable).where(inArray(attachmentsTable.requisition_id, lineageIds));
+  res.json(atts.map(a => ({ ...a, inherited: a.requisition_id !== id, uploaded_at: a.uploaded_at.toISOString(), url: `${baseUrl}/files/${a.filename}` })));
 });
 
 export default router;

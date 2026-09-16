@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, numeric } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, numeric, boolean } from "drizzle-orm/pg-core";
 import { requisitionsTable } from "./requisitions";
 import { assetsTable } from "./assets";
 
@@ -10,6 +10,8 @@ export const requisitionItemsTable = pgTable("requisition_items", {
   unit: text("unit"),
   reference_no: text("reference_no"),
   expected_cost: numeric("expected_cost", { precision: 12, scale: 2 }),
+  // NULL means the historical ambiguous value; true means expected_cost is a unit cost.
+  expected_cost_is_unit: boolean("expected_cost_is_unit"),
   description: text("description"),
   remark: text("remark"),
   asset_id: integer("asset_id").references(() => assetsTable.id),

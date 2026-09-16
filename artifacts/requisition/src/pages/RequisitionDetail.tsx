@@ -15,6 +15,7 @@ import {
   useHoldRequisition,
   useResumeRequisition,
   useCompleteRequisition,
+  usePartialCloseRequisition,
   useListApprovalNotes,
   useAddApprovalNote,
   useDeleteApprovalNote,
@@ -47,6 +48,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
@@ -86,6 +88,8 @@ export default function RequisitionDetail() {
   const [newPriority, setNewPriority] = useState("");
   const [approvalNoteOpen, setApprovalNoteOpen] = useState(false);
   const [completeOpen, setCompleteOpen] = useState(false);
+  const [partialCloseOpen, setPartialCloseOpen] = useState(false);
+  const [fulfilledItemIds, setFulfilledItemIds] = useState<number[]>([]);
   const [replyQueryId, setReplyQueryId] = useState<number | null>(null);
   const [replyFile, setReplyFile] = useState<File | null>(null);
   const [uploadingFor, setUploadingFor] = useState<"requisition" | null>(null);
@@ -168,6 +172,7 @@ export default function RequisitionDetail() {
   const holdMut = useHoldRequisition();
   const resumeMut = useResumeRequisition();
   const completeMut = useCompleteRequisition();
+  const partialCloseMut = usePartialCloseRequisition();
   const addApprovalNoteMut = useAddApprovalNote();
   const deleteApprovalNoteMut = useDeleteApprovalNote();
   const assignMut = useAssignRequisition();
@@ -235,6 +240,30 @@ export default function RequisitionDetail() {
   const isParty = req.raised_by_id === user.id || req.checker1_id === user.id || req.checker2_id === user.id || req.approver_id === user.id;
   const canEdit = (isPurchaseHead || isParty) && ["draft", "pending_checkers", "pending_approver", "on_hold"].includes(req.status);
   const canComplete = isPurchaseHead && req.status === "in_progress";
+  const canPartialClose = isPurchaseHead && req.status === "in_progress";
+  const remainingItemCount = (req.items?.length ?? 0) - fulfilledItemIds.length;
+
+  function toggleFulfilledItem(itemId: number, checked: boolean) {
+    setFulfilledItemIds((current) => checked
+      ? [...current, itemId]
+      : current.filter((id) => id !== itemId));
+  }
+
+  function submitPartialClose() {
+    if (fulfilledItemIds.length === 0 || remainingItemCount === 0) {
+      toast({ title: "Select fulfilled items and leave at least one remaining item", variant: "destructive" });
+      return;
+    }
+    partialCloseMut.mutate({ id, data: { fulfilled_item_ids: fulfilledItemIds } }, {
+      onSuccess: (child) => {
+        invalidate();
+        setPartialCloseOpen(false);
+        setFulfilledItemIds([]);
+        toast({ title: "Requisition partially closed", description: `Remaining items moved to ${child.ref_number}.` });
+      },
+      onError: () => toast({ title: "Partial close failed", description: "Please try again.", variant: "destructive" }),
+    });
+  }
 
   function startEdit() {
 
@@ -373,6 +402,8 @@ export default function RequisitionDetail() {
               <PriorityBadge priority={req.priority} />
             </div>
             <p className="text-muted-foreground text-sm mt-1">{req.purpose ?? "No purpose stated"}</p>
+            {req.parent && req.parent_requisition_id && <p className="text-xs text-amber-700 mt-1">CONTINUATION OF <Link href={`/requisitions/${req.parent_requisition_id}`} className="font-medium underline">{req.parent}</Link></p>}
+            {req.continuation && req.continuation_requisition_id && <p className="text-xs text-emerald-700 mt-1">CONTINUATION: <Link href={`/requisitions/${req.continuation_requisition_id}`} className="font-medium underline">{req.continuation}</Link></p>}
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -430,8 +461,9 @@ export default function RequisitionDetail() {
                           <Input value={it.reference_no} onChange={(e) => updateEditItem(it.tempId, "reference_no", e.target.value)} data-testid={`input-edit-item-ref-${it.id}`} />
                         </div>
                         <div>
-                          <label className="text-xs font-medium">Expected Cost (₹, benchmark)</label>
+                          <label className="text-xs font-medium">Expected Cost per Unit (₹)</label>
                           <Input type="number" step="0.01" min="0" value={it.expected_cost} onChange={(e) => updateEditItem(it.tempId, "expected_cost", e.target.value)} data-testid={`input-edit-item-cost-${it.id}`} />
+                          <p className="text-xs text-muted-foreground">Enter the expected cost of one unit. Total is calculated automatically.</p>
                         </div>
                         <div className="col-span-2">
                           <label className="text-xs font-medium">Vessel / Equipment / Location</label>
@@ -768,6 +800,35 @@ export default function RequisitionDetail() {
             </Dialog>
           )}
 
+          {canPartialClose && (
+            <Dialog open={partialCloseOpen} onOpenChange={(open) => { setPartialCloseOpen(open); if (!open) setFulfilledItemIds([]); }}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline" className="gap-1.5" data-testid="button-partial-close">
+                  <FileCheck className="w-3.5 h-3.5" />Partially Close
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-lg">
+                <DialogHeader><DialogTitle>Partially Close {req.ref_number}</DialogTitle></DialogHeader>
+                <div className="space-y-3 mt-2">
+                  <p className="text-sm text-muted-foreground">Select the items that have been fulfilled. The remaining items will continue in a linked requisition.</p>
+                  <div className="space-y-2">
+                    {(req.items ?? []).map((item) => (
+                      <label key={item.id} className="flex items-center gap-3 rounded-md border p-3 cursor-pointer">
+                        <Checkbox checked={fulfilledItemIds.includes(item.id)} onCheckedChange={(checked) => toggleFulfilledItem(item.id, checked === true)} />
+                        <span className="flex-1 text-sm font-medium">{item.item_name}</span>
+                        <span className="text-sm text-muted-foreground">{item.quantity}{item.unit ? ` ${item.unit}` : ""}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="text-sm text-muted-foreground">Remaining items: <span className="font-semibold text-foreground">{remainingItemCount}</span></p>
+                  <Button className="w-full" disabled={partialCloseMut.isPending || fulfilledItemIds.length === 0 || remainingItemCount === 0} onClick={submitPartialClose} data-testid="button-confirm-partial-close">
+                    {partialCloseMut.isPending ? "Partially Closing..." : "Partially Close"}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          )}
+
           {canComplete && (
             <Dialog open={completeOpen} onOpenChange={setCompleteOpen}>
               <DialogTrigger asChild>
@@ -786,10 +847,10 @@ export default function RequisitionDetail() {
                     <div className="flex flex-wrap gap-1.5">
                       {approvalNotes.map(n => (
                         <Badge key={n.id} variant="outline" className="gap-1.5" data-testid={`badge-complete-approval-note-${n.id}`}>
-                          {n.note_number}
-                          <button type="button" onClick={() => deleteApprovalNoteMut.mutate({ id, noteId: n.id }, { onSuccess: () => invalidate() })} className="text-muted-foreground hover:text-destructive">
+                          {n.note_number}{n.inherited && <span className="text-xs text-muted-foreground">Inherited</span>}
+                          {!n.inherited && <button type="button" onClick={() => deleteApprovalNoteMut.mutate({ id, noteId: n.id }, { onSuccess: () => invalidate() })} className="text-muted-foreground hover:text-destructive">
                             <Trash2 className="w-3 h-3" />
-                          </button>
+                          </button>}
                         </Badge>
                       ))}
                     </div>
@@ -864,7 +925,7 @@ export default function RequisitionDetail() {
         <TabsContent value="details" className="mt-4 space-y-4">
           <Card>
             <CardContent className="pt-5 grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-              <div><p className="text-xs text-muted-foreground uppercase font-medium mb-1">Raised By</p><p className="font-medium flex items-center gap-1"><User className="w-3.5 h-3.5" />{req.raised_by_name}</p></div>
+              <div><p className="text-xs text-muted-foreground uppercase font-medium mb-1">Raised By</p><p className="font-medium flex items-center gap-1"><User className="w-3.5 h-3.5" />{req.raised_by_name}{req.is_continuation && <span className="text-xs text-muted-foreground">· Continuation</span>}</p></div>
               <div><p className="text-xs text-muted-foreground uppercase font-medium mb-1">Site</p><p className="font-medium flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{req.site_name ?? "—"}</p></div>
               <div><p className="text-xs text-muted-foreground uppercase font-medium mb-1">Date</p><p className="font-medium flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{formatDate(req.requisition_date)}</p></div>
               <div><p className="text-xs text-muted-foreground uppercase font-medium mb-1">Project</p><p className="font-medium flex items-center gap-1"><Folder className="w-3.5 h-3.5" />{req.project_name ?? "—"}</p></div>
@@ -908,8 +969,8 @@ export default function RequisitionDetail() {
                     <div className="flex flex-wrap gap-1.5">
                       {approvalNotes.map(n => (
                         <Badge key={n.id} variant="outline" className="gap-1.5" data-testid={`badge-approval-note-${n.id}`}>
-                          {n.note_number}
-                          {isPurchaseHead && (
+                          {n.note_number}{n.inherited && <span className="text-xs text-muted-foreground">Inherited</span>}
+                          {isPurchaseHead && !n.inherited && (
                             <button type="button" onClick={() => deleteApprovalNoteMut.mutate({ id, noteId: n.id }, { onSuccess: () => invalidate() })} className="text-muted-foreground hover:text-destructive">
                               <Trash2 className="w-3 h-3" />
                             </button>
@@ -943,14 +1004,15 @@ export default function RequisitionDetail() {
                     <TableHead>Ref No.</TableHead>
                     <TableHead className="text-right">Qty</TableHead>
                     <TableHead>Unit</TableHead>
-                    <TableHead className="text-right">Expected Cost (₹)</TableHead>
+                    <TableHead className="text-right">Unit Cost / Stored Cost (₹)</TableHead>
+                    <TableHead className="text-right">Line Total (₹)</TableHead>
                     <TableHead>Description</TableHead>
                     <TableHead>Remark</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {!req.items?.length ? (
-                    <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">No items added.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-8">No items added.</TableCell></TableRow>
                   ) : req.items.map((item, i) => (
                     <TableRow key={item.id} data-testid={`row-item-${item.id}`}>
                       <TableCell className="text-muted-foreground text-xs">{i + 1}</TableCell>
@@ -960,6 +1022,7 @@ export default function RequisitionDetail() {
                       <TableCell className="text-right">{item.quantity}</TableCell>
                       <TableCell className="text-muted-foreground">{item.unit ?? "—"}</TableCell>
                       <TableCell className="text-right font-medium">{item.expected_cost != null ? formatINR(item.expected_cost) : "—"}</TableCell>
+                      <TableCell className="text-right font-medium">{item.line_total != null ? formatINR(item.line_total) : "—"}</TableCell>
                       <TableCell className="text-muted-foreground text-xs whitespace-normal break-words">{item.description ?? "—"}</TableCell>
                       <TableCell className="text-muted-foreground text-xs whitespace-normal break-words">{item.remark ?? "—"}</TableCell>
                     </TableRow>
@@ -1031,6 +1094,7 @@ export default function RequisitionDetail() {
                   <div>
                     <p className="text-sm font-medium">{q.raised_by_name} <span className="text-xs text-muted-foreground">({q.raised_by_role})</span></p>
                     <p className="text-sm mt-1">{q.message}</p>
+                    {q.inherited && <p className="text-xs text-muted-foreground mt-1">Inherited from {q.source_ref_number ?? "parent requisition"}</p>}
                     <p className="text-xs text-muted-foreground mt-1">{formatStatusUpdateTime(q.created_at)}</p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
@@ -1261,6 +1325,7 @@ export default function RequisitionDetail() {
                     <p className="text-sm font-medium">
                       {STAGE_OPTIONS.find((o) => o.value === u.stage)?.label ??
                         u.stage}
+                      {u.inherited && <span className="text-xs text-muted-foreground"> · Inherited from {u.source_ref_number ?? "parent requisition"}</span>}
                     </p>
 
                     <p className="text-xs text-muted-foreground">

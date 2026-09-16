@@ -1,13 +1,28 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { queriesTable, queryRepliesTable, attachmentsTable } from "@workspace/db";
+import { queriesTable, queryRepliesTable, attachmentsTable, requisitionPartialRelationsTable } from "@workspace/db";
 import { eq, inArray } from "drizzle-orm";
 
 const router = Router();
 
+async function getRelationLineage(id: number) {
+  const lineage = [id];
+  let currentId = id;
+  while (true) {
+    const [relation] = await db.select({ parent_requisition_id: requisitionPartialRelationsTable.parent_requisition_id })
+      .from(requisitionPartialRelationsTable)
+      .where(eq(requisitionPartialRelationsTable.child_requisition_id, currentId)).limit(1);
+    if (!relation) break;
+    lineage.push(relation.parent_requisition_id);
+    currentId = relation.parent_requisition_id;
+  }
+  return lineage.reverse();
+}
+
 router.get("/requisitions/:id/queries", async (req, res) => {
   const reqId = Number(req.params.id);
-  const queries = await db.select().from(queriesTable).where(eq(queriesTable.requisition_id, reqId)).orderBy(queriesTable.created_at);
+  const lineageIds = await getRelationLineage(reqId);
+  const queries = await db.select().from(queriesTable).where(inArray(queriesTable.requisition_id, lineageIds)).orderBy(queriesTable.created_at);
   const queryIds = queries.map(q => q.id);
   const replies = queryIds.length > 0 ? await db.select().from(queryRepliesTable).where(inArray(queryRepliesTable.query_id, queryIds)) : [];
   const replyIds = replies.map(r => r.id);
@@ -17,6 +32,7 @@ router.get("/requisitions/:id/queries", async (req, res) => {
 
   res.json(queries.map(q => ({
     ...q,
+    inherited: q.requisition_id !== reqId,
     created_at: q.created_at.toISOString(),
     resolved_at: q.resolved_at?.toISOString() ?? null,
     replies: replies.filter(r => r.query_id === q.id).map(r => ({
