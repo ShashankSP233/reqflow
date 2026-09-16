@@ -42,3 +42,10 @@ Thumbs.db
 
 # Runtime uploaded files
 artifacts/api-server/uploads/
+
+
+demo-seed.sql
+
+logincred.txt
+
+reqflow-handover.zip
