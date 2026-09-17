@@ -610,9 +610,8 @@ For eligible requisitions, the Purchase Head can see:
 
 Partial Close is available while the requisition is still active and is not already completed.
 
-The Partial Close dialog allows the Purchase Head to select the fulfilled items.
-
-It does **not** request a new approval note.
+The Partial Close dialog allows the Purchase Head to select the fulfilled items
+and requires a new approval/closure note for the completed parent portion.
 
 ---
 

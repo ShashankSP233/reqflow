@@ -1172,8 +1172,10 @@ export const PartialCloseRequisitionParams = zod.object({
 
 
 
+
 export const PartialCloseRequisitionBody = zod.object({
-  "fulfilled_item_ids": zod.array(zod.int()).min(1)
+  "fulfilled_item_ids": zod.array(zod.int()).min(1),
+  "closure_note": zod.string().min(1)
 })
 
 export const PartialCloseRequisitionResponse = zod.object({

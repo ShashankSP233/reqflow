@@ -286,6 +286,7 @@ router.post("/requisitions/:id/approval-notes", async (req, res) => {
 router.post("/requisitions/:id/partial-close", async (req, res) => {
   const id = Number(req.params.id);
   const fulfilledItemIds = req.body?.fulfilled_item_ids;
+  const closureNote = typeof req.body?.closure_note === "string" ? req.body.closure_note.trim() : "";
 
   if (req.currentUser?.role !== "purchase_head") {
     res.status(403).json({ error: "Only Purchase Head can partially close a requisition" });
@@ -293,6 +294,10 @@ router.post("/requisitions/:id/partial-close", async (req, res) => {
   }
   if (!Number.isInteger(id) || id <= 0 || !Array.isArray(fulfilledItemIds) || fulfilledItemIds.length === 0 || fulfilledItemIds.some((itemId: unknown) => !Number.isInteger(itemId))) {
     res.status(400).json({ error: "fulfilled_item_ids must contain at least one integer item ID" });
+    return;
+  }
+  if (!closureNote) {
+    res.status(400).json({ error: "An approval/closure note is required to partially close this requisition" });
     return;
   }
 
@@ -415,11 +420,16 @@ router.post("/requisitions/:id/partial-close", async (req, res) => {
       await tx.update(requisitionsTable)
         .set({ status: "completed", completed_at: now, updated_at: now })
         .where(eq(requisitionsTable.id, id));
+      await tx.insert(approvalNotesTable).values({
+        requisition_id: id,
+        note_number: closureNote,
+        created_by_name: req.currentUser!.name,
+      });
       await tx.insert(statusUpdatesTable).values({
         requisition_id: id,
         updated_by_name: req.currentUser!.name,
         stage: "prepared",
-        notes: `Partially closed by Purchase Head. Remaining items moved to ${childRefNumber}.`,
+        notes: `Partially closed by Purchase Head. Approval/closure note: ${closureNote}. Remaining items moved to ${childRefNumber}.`,
         update_date: todayIST(),
       });
 

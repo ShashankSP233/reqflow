@@ -90,6 +90,7 @@ export default function RequisitionDetail() {
   const [completeOpen, setCompleteOpen] = useState(false);
   const [partialCloseOpen, setPartialCloseOpen] = useState(false);
   const [fulfilledItemIds, setFulfilledItemIds] = useState<number[]>([]);
+  const [partialCloseNote, setPartialCloseNote] = useState("");
   const [replyQueryId, setReplyQueryId] = useState<number | null>(null);
   const [replyFile, setReplyFile] = useState<File | null>(null);
   const [uploadingFor, setUploadingFor] = useState<"requisition" | null>(null);
@@ -254,11 +255,16 @@ export default function RequisitionDetail() {
       toast({ title: "Select fulfilled items and leave at least one remaining item", variant: "destructive" });
       return;
     }
-    partialCloseMut.mutate({ id, data: { fulfilled_item_ids: fulfilledItemIds } }, {
+    if (!partialCloseNote.trim()) {
+      toast({ title: "Approval / Closure Note is required", variant: "destructive" });
+      return;
+    }
+    partialCloseMut.mutate({ id, data: { fulfilled_item_ids: fulfilledItemIds, closure_note: partialCloseNote.trim() } }, {
       onSuccess: (child) => {
         invalidate();
         setPartialCloseOpen(false);
         setFulfilledItemIds([]);
+        setPartialCloseNote("");
         toast({ title: "Requisition partially closed", description: `Remaining items moved to ${child.ref_number}.` });
       },
       onError: () => toast({ title: "Partial close failed", description: "Please try again.", variant: "destructive" }),
@@ -801,7 +807,7 @@ export default function RequisitionDetail() {
           )}
 
           {canPartialClose && (
-            <Dialog open={partialCloseOpen} onOpenChange={(open) => { setPartialCloseOpen(open); if (!open) setFulfilledItemIds([]); }}>
+            <Dialog open={partialCloseOpen} onOpenChange={(open) => { setPartialCloseOpen(open); if (!open) { setFulfilledItemIds([]); setPartialCloseNote(""); } }}>
               <DialogTrigger asChild>
                 <Button size="sm" variant="outline" className="gap-1.5" data-testid="button-partial-close">
                   <FileCheck className="w-3.5 h-3.5" />Partially Close
@@ -821,7 +827,11 @@ export default function RequisitionDetail() {
                     ))}
                   </div>
                   <p className="text-sm text-muted-foreground">Remaining items: <span className="font-semibold text-foreground">{remainingItemCount}</span></p>
-                  <Button className="w-full" disabled={partialCloseMut.isPending || fulfilledItemIds.length === 0 || remainingItemCount === 0} onClick={submitPartialClose} data-testid="button-confirm-partial-close">
+                  <div className="space-y-1.5">
+                    <label htmlFor="partial-close-note" className="text-sm font-medium">Approval / Closure Note</label>
+                    <Textarea id="partial-close-note" value={partialCloseNote} onChange={(event) => setPartialCloseNote(event.target.value)} placeholder="Enter the approval or closure note" data-testid="input-partial-close-note" />
+                  </div>
+                  <Button className="w-full" disabled={partialCloseMut.isPending || fulfilledItemIds.length === 0 || remainingItemCount === 0 || !partialCloseNote.trim()} onClick={submitPartialClose} data-testid="button-confirm-partial-close">
                     {partialCloseMut.isPending ? "Partially Closing..." : "Partially Close"}
                   </Button>
                 </div>
@@ -881,10 +891,10 @@ export default function RequisitionDetail() {
                     </p>
                   )}
 
-                  <Button className="w-full" disabled={completeMut.isPending || !approvalNotes?.length} onClick={() => {
+                  <Button className="w-full" disabled={completeMut.isPending || !approvalNotes?.some((note) => !note.inherited)} onClick={() => {
                     completeMut.mutate({ id }, {
                       onSuccess: () => { invalidate(); setCompleteOpen(false); toast({ title: "Requisition closed" }); },
-                      onError: () => toast({ title: "Error", description: "Add an approval note first.", variant: "destructive" }),
+                      onError: () => toast({ title: "Error", description: "Add a new approval note first.", variant: "destructive" }),
                     });
                   }} data-testid="button-confirm-complete">Confirm Close</Button>
                 </div>

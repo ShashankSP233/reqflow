@@ -389,6 +389,8 @@ export interface AssetInput {
 export interface PartialCloseInput {
   /** @minItems 1 */
   fulfilled_item_ids: number[];
+  /** @minLength 1 */
+  closure_note: string;
 }
 
 export interface ApprovalNote {
