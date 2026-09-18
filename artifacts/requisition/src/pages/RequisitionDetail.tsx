@@ -817,7 +817,7 @@ export default function RequisitionDetail() {
                 <DialogHeader><DialogTitle>Partially Close {req.ref_number}</DialogTitle></DialogHeader>
                 <div className="space-y-3 mt-2">
                   <p className="text-sm text-muted-foreground">Select the items that have been fulfilled. The remaining items will continue in a linked requisition.</p>
-                  <div className="space-y-2">
+                  <div className="max-h-[50vh] space-y-2 overflow-y-auto">
                     {(req.items ?? []).map((item) => (
                       <label key={item.id} className="flex items-center gap-3 rounded-md border p-3 cursor-pointer">
                         <Checkbox checked={fulfilledItemIds.includes(item.id)} onCheckedChange={(checked) => toggleFulfilledItem(item.id, checked === true)} />
