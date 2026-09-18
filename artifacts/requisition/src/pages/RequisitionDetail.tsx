@@ -1339,7 +1339,7 @@ export default function RequisitionDetail() {
                     </p>
 
                     <p className="text-xs text-muted-foreground">
-                      {u.updated_by_name} · {formatDateTime(u.created_at)}
+                      {u.updated_by_name} · {formatStatusUpdateTime(u.created_at)}
                     </p>
 
                     {u.notes && (
