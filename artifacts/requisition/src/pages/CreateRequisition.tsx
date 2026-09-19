@@ -382,7 +382,7 @@ export default function CreateRequisition() {
                               <SelectValue placeholder={selectedProjectId ? "Select (optional)" : "Pick a project first"} />
                             </SelectTrigger>
                           </FormControl>
-                          <SelectContent>
+                          <SelectContent className="max-h-60">
                             {assets?.map(a => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}
                           </SelectContent>
                         </Select>

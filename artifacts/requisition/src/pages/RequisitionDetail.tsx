@@ -482,7 +482,7 @@ export default function RequisitionDetail() {
                             }}
                           >
                             <SelectTrigger data-testid={`select-edit-item-asset-${it.id}`}><SelectValue placeholder="None" /></SelectTrigger>
-                            <SelectContent>{assets?.map((a) => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}</SelectContent>
+                            <SelectContent className="max-h-60">{assets?.map((a) => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}</SelectContent>
                           </Select>
                         </div>
                         <div className="col-span-2">
