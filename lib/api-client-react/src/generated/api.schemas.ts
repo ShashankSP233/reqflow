@@ -583,6 +583,10 @@ approver_id?: number;
 checker_id?: number;
 project_id?: number;
 /**
+ * Returns requisitions awaiting an action for the authenticated user's role.
+ */
+needs_action?: boolean;
+/**
  * Matches ref number, requester, purpose, site, item names, or vessel/equipment/location names.
  */
 search?: string;

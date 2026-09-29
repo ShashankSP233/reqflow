@@ -14,7 +14,7 @@ import {
   approvalNotesTable, requisitionPartialRelationsTable, requisitionPartialRelationItemsTable,
   holidaysTable, userProjectsTable
 } from "@workspace/db";
-import { eq, and, sql, inArray, or, notInArray } from "drizzle-orm";
+import { eq, and, sql, inArray, or, notInArray, isNull } from "drizzle-orm";
 import { computeCompliance, toDateOnlyIST, todayIST } from "../lib/business-days";
 import type { SessionUser } from "../lib/session-types";
 
@@ -207,7 +207,7 @@ const baseSelect = {
 
 // ── List ─────────────────────────────────────────────────────────────────────
 router.get("/requisitions", async (req, res) => {
-  const { status, priority, raised_by_id, assigned_to_id, checker1_id, checker2_id, approver_id, checker_id, project_id, search } = req.query;
+  const { status, priority, raised_by_id, assigned_to_id, checker1_id, checker2_id, approver_id, checker_id, project_id, search, needs_action } = req.query;
   const conditions = [];
   if (status) conditions.push(eq(requisitionsTable.status, String(status)));
   if (priority) conditions.push(eq(requisitionsTable.priority, String(priority)));
@@ -220,6 +220,34 @@ router.get("/requisitions", async (req, res) => {
   // A checker can be checker1 on one requisition and checker2 on another —
   // this matches either role for the same person in a single query.
   if (checker_id) conditions.push(or(eq(requisitionsTable.checker1_id, Number(checker_id)), eq(requisitionsTable.checker2_id, Number(checker_id))));
+  if (needs_action === "true" && req.currentUser) {
+    const userId = req.currentUser.id;
+    if (req.currentUser.role === "checker") {
+      conditions.push(or(
+        and(
+          eq(requisitionsTable.status, "pending_checkers"),
+          or(
+            and(eq(requisitionsTable.checker1_id, userId), or(isNull(requisitionsTable.checker1_status), eq(requisitionsTable.checker1_status, "pending"))),
+            and(eq(requisitionsTable.checker2_id, userId), or(isNull(requisitionsTable.checker2_status), eq(requisitionsTable.checker2_status, "pending"))),
+          ),
+        ),
+        and(eq(requisitionsTable.status, "on_hold"), or(eq(requisitionsTable.checker1_id, userId), eq(requisitionsTable.checker2_id, userId))),
+      ));
+    } else if (req.currentUser.role === "approver") {
+      conditions.push(and(
+        or(eq(requisitionsTable.status, "pending_approver"), eq(requisitionsTable.status, "on_hold")),
+        eq(requisitionsTable.approver_id, userId),
+      ));
+    } else if (req.currentUser.role === "purchase_member") {
+      conditions.push(and(eq(requisitionsTable.status, "in_progress"), eq(requisitionsTable.assigned_to_id, userId)));
+    } else if (req.currentUser.role === "site_user") {
+      conditions.push(and(eq(requisitionsTable.status, "draft"), eq(requisitionsTable.raised_by_id, userId)));
+    } else if (req.currentUser.role === "purchase_head") {
+      conditions.push(inArray(requisitionsTable.status, ["pending_checkers", "pending_approver", "approved", "on_hold"]));
+    } else {
+      conditions.push(sql`FALSE`);
+    }
+  }
   // One unified search across everything a person might remember about a
   // past requisition — ref number, requester, purpose, site, or what was
   // actually requested (item name / vessel-equipment-location).

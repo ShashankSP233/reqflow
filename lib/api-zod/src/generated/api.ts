@@ -188,6 +188,7 @@ export const ListRequisitionsQueryParams = zod.object({
   "approver_id": zod.coerce.number().int().optional(),
   "checker_id": zod.coerce.number().int().optional(),
   "project_id": zod.coerce.number().int().optional(),
+  "needs_action": zod.coerce.boolean().optional().describe('Returns requisitions awaiting an action for the authenticated user\'s role.'),
   "search": zod.coerce.string().optional().describe('Matches ref number, requester, purpose, site, item names, or vessel\/equipment\/location names.')
 })
 

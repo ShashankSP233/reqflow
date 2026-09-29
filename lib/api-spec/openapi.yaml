@@ -299,6 +299,11 @@ paths:
           in: query
           schema:
             type: integer
+        - name: needs_action
+          in: query
+          schema:
+            type: boolean
+          description: Returns requisitions awaiting an action for the authenticated user's role.
         - name: search
           in: query
           schema:

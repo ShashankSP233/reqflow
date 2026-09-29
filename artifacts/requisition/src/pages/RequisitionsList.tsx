@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useRole } from "@/context/RoleContext";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const STATUS_OPTIONS = [
   { value: "draft", label: "Draft" },
@@ -32,11 +33,22 @@ const PRIORITY_OPTIONS = [
 ];
 
 const DRAFT_KEY = "reqflow:create-requisition-draft";
+const LIST_PREFERENCES_KEY = "reqflow:requisitions-list";
+
+function readListPreferences(userId: number) {
+  try {
+    const saved = sessionStorage.getItem(`${LIST_PREFERENCES_KEY}:${userId}`);
+    if (saved) return JSON.parse(saved) as { searchInput?: string; statusFilter?: string; priorityFilter?: string; tab?: string };
+  } catch {
+    // Ignore unavailable or invalid session storage and use the defaults.
+  }
+  return {};
+}
 
 export default function RequisitionsList() {
-  
   const { user } = useRole();
   const { toast } = useToast();
+  const savedPreferences = readListPreferences(user.id);
   const clearDraft = () => {
   localStorage.removeItem(DRAFT_KEY);
     toast({
@@ -44,10 +56,19 @@ export default function RequisitionsList() {
       description: "The saved requisition draft has been removed.",
     });
   };
-  const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [priorityFilter, setPriorityFilter] = useState("all");
+  const [searchInput, setSearchInput] = useState(savedPreferences.searchInput ?? "");
+  const [search, setSearch] = useState(savedPreferences.searchInput ?? "");
+  const [statusFilter, setStatusFilter] = useState(savedPreferences.statusFilter ?? "all");
+  const [priorityFilter, setPriorityFilter] = useState(savedPreferences.priorityFilter ?? "all");
+  const [tab, setTab] = useState(savedPreferences.tab === "action" ? "action" : "all");
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(`${LIST_PREFERENCES_KEY}:${user.id}`, JSON.stringify({ searchInput, statusFilter, priorityFilter, tab }));
+    } catch {
+      // Filtering continues to work when storage is unavailable.
+    }
+  }, [user.id, searchInput, statusFilter, priorityFilter, tab]);
 
   // Debounce: wait for a short pause in typing before actually searching,
   // rather than firing a request on every keystroke.
@@ -56,17 +77,18 @@ export default function RequisitionsList() {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  const params: Record<string, string | number | undefined> = {};
+  const params: Record<string, string | number | boolean | undefined> = {};
   if (statusFilter !== "all") params.status = statusFilter;
   if (priorityFilter !== "all") params.priority = priorityFilter;
   if (user.role === "site_user") params.raised_by_id = user.id;
   // if (user.role === "purchase_member") params.assigned_to_id = user.id;
   if (user.role === "checker") params.checker_id = user.id;
   if (search) params.search = search;
+  if (tab === "action") params.needs_action = true;
 
   const { data: requisitions, isLoading } = useListRequisitions(params as Parameters<typeof useListRequisitions>[0]);
 
-  const hasFilters = statusFilter !== "all" || priorityFilter !== "all" || !!search;
+  const hasFilters = statusFilter !== "all" || priorityFilter !== "all" || !!search || tab === "action";
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-5">
@@ -97,6 +119,13 @@ export default function RequisitionsList() {
           </div>
         )}
       </div>
+
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList aria-label="Requisition views">
+          <TabsTrigger value="all">All Requisitions</TabsTrigger>
+          <TabsTrigger value="action">Needs My Action</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       <div className="flex flex-col sm:flex-row gap-3 items-center">
         <div className="relative flex-1 w-full">
