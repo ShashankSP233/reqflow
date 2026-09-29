@@ -49,3 +49,7 @@ demo-seed.sql
 logincred.txt
 
 reqflow-handover.zip
+
+
+backups/
+lib/db/drizzle
