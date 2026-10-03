@@ -1634,12 +1634,11 @@ export const GetStatusUpdateAnalyticsResponse = zod.object({
 
 export const GetPurchaseMemberPerformanceResponseItem = zod.object({
   "assigned_to_name": zod.string(),
+  "total_assigned": zod.int(),
   "total_completed": zod.int(),
-  "low": zod.int(),
-  "medium": zod.int(),
-  "high": zod.int(),
-  "urgent": zod.int(),
-  "avg_completion_days": zod.number().describe('Average days from assignment to completion.')
+  "completion_pct": zod.number().describe('Completed divided by assigned, as a percentage.'),
+  "avg_completion_days": zod.number().describe('Average days from assignment to completion.'),
+  "share_pct": zod.number().describe('This member\'s share of all assigned requisitions, as a percentage.')
 })
 export const GetPurchaseMemberPerformanceResponse = zod.array(GetPurchaseMemberPerformanceResponseItem)
 

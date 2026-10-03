@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { requisitionsTable, holidaysTable, projectsTable, statusUpdatesTable } from "@workspace/db";
-import { sql, eq } from "drizzle-orm";
+import { sql, eq, isNotNull, inArray } from "drizzle-orm";
 import { computeCompliance, todayIST } from "../lib/business-days";
 
 const router = Router();
@@ -200,46 +200,54 @@ router.get("/analytics/status-updates", async (_req, res) => {
 // completed, broken down by priority, and their average completion time
 // (measured from assignment, not creation, since checker/approver review
 // time upstream isn't something the purchase member controls).
+// Purchase team workload: per member, how many requisitions were assigned,
+// how many are completed, completion %, average completion time (measured from
+// assignment, since upstream review time isn't in the purchase member's control),
+// and each member's share of all assigned requisitions.
 router.get("/analytics/purchase-member-performance", async (_req, res) => {
   const rows = await db
     .select({
       assigned_to_name: requisitionsTable.assigned_to_name,
-      priority: requisitionsTable.priority,
+      status: requisitionsTable.status,
       assigned_at: requisitionsTable.assigned_at,
       completed_at: requisitionsTable.completed_at,
     })
     .from(requisitionsTable)
-    .where(eq(requisitionsTable.status, "completed"));
+    .where(
+      sql`${isNotNull(requisitionsTable.assigned_to_name)} AND ${inArray(requisitionsTable.status, ["assigned", "in_progress", "completed"])}`,
+    );
 
-  type Entry = { total: number; low: number; medium: number; high: number; urgent: number; totalDays: number; timedCount: number };
+  type Entry = { assigned: number; completed: number; totalDays: number; timedCount: number };
   const byMember = new Map<string, Entry>();
   for (const r of rows) {
     if (!r.assigned_to_name) continue;
     if (!byMember.has(r.assigned_to_name)) {
-      byMember.set(r.assigned_to_name, { total: 0, low: 0, medium: 0, high: 0, urgent: 0, totalDays: 0, timedCount: 0 });
+      byMember.set(r.assigned_to_name, { assigned: 0, completed: 0, totalDays: 0, timedCount: 0 });
     }
     const entry = byMember.get(r.assigned_to_name)!;
-    entry.total += 1;
-    if (r.priority === "low" || r.priority === "medium" || r.priority === "high" || r.priority === "urgent") {
-      entry[r.priority] += 1;
-    }
-    if (r.completed_at && r.assigned_at) {
-      entry.totalDays += (r.completed_at.getTime() - r.assigned_at.getTime()) / (1000 * 60 * 60 * 24);
-      entry.timedCount += 1;
+    entry.assigned += 1;
+    if (r.status === "completed") {
+      entry.completed += 1;
+      if (r.completed_at && r.assigned_at) {
+        entry.totalDays += (r.completed_at.getTime() - r.assigned_at.getTime()) / (1000 * 60 * 60 * 24);
+        entry.timedCount += 1;
+      }
     }
   }
+
+  const grandTotal = Array.from(byMember.values()).reduce((s, e) => s + e.assigned, 0);
+  const round1 = (n: number) => Math.round(n * 10) / 10;
 
   const result = Array.from(byMember.entries())
     .map(([assigned_to_name, e]) => ({
       assigned_to_name,
-      total_completed: e.total,
-      low: e.low,
-      medium: e.medium,
-      high: e.high,
-      urgent: e.urgent,
-      avg_completion_days: e.timedCount > 0 ? Math.round((e.totalDays / e.timedCount) * 10) / 10 : 0,
+      total_assigned: e.assigned,
+      total_completed: e.completed,
+      completion_pct: e.assigned > 0 ? round1((e.completed / e.assigned) * 100) : 0,
+      avg_completion_days: e.timedCount > 0 ? round1(e.totalDays / e.timedCount) : 0,
+      share_pct: grandTotal > 0 ? round1((e.assigned / grandTotal) * 100) : 0,
     }))
-    .sort((a, b) => b.total_completed - a.total_completed);
+    .sort((a, b) => b.total_assigned - a.total_assigned);
 
   res.json(result);
 });

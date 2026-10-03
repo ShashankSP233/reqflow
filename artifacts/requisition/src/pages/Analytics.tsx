@@ -258,35 +258,62 @@ export default function Analytics() {
               <Users className="w-4 h-4 text-primary" />
               Purchase Member Performance
             </CardTitle>
-            <CardDescription>Completed requisitions per team member, by priority, and average time from assignment to completion</CardDescription>
+            <CardDescription>Requisitions assigned to each member, how many they completed, and how long completion takes on average</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/30">
                   <TableHead>Name</TableHead>
+                  <TableHead className="text-right">Assigned</TableHead>
                   <TableHead className="text-right">Completed</TableHead>
-                  <TableHead className="text-right">Urgent</TableHead>
-                  <TableHead className="text-right">High</TableHead>
-                  <TableHead className="text-right">Medium</TableHead>
-                  <TableHead className="text-right">Low</TableHead>
-                  <TableHead className="text-right">Avg Days</TableHead>
+                  <TableHead className="text-right">Completion %</TableHead>
+                  <TableHead className="text-right">Avg Completion Time</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {memberPerformance.map((m, i) => (
-                  <TableRow key={i} data-testid={`row-member-performance-${i}`}>
+                  <TableRow key={m.assigned_to_name} data-testid={`row-member-performance-${i}`}>
                     <TableCell className="font-medium text-sm">{m.assigned_to_name}</TableCell>
-                    <TableCell className="text-right font-medium">{m.total_completed}</TableCell>
-                    <TableCell className="text-right text-red-600">{m.urgent}</TableCell>
-                    <TableCell className="text-right text-amber-600">{m.high}</TableCell>
-                    <TableCell className="text-right text-muted-foreground">{m.medium}</TableCell>
-                    <TableCell className="text-right text-muted-foreground">{m.low}</TableCell>
-                    <TableCell className="text-right">{m.avg_completion_days}d</TableCell>
+                    <TableCell className="text-right font-medium">{m.total_assigned}</TableCell>
+                    <TableCell className="text-right">{m.total_completed}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <div className="h-1.5 w-20 rounded-full bg-muted overflow-hidden">
+                          <div className="h-full bg-emerald-500" style={{ width: `${m.completion_pct}%` }} />
+                        </div>
+                        <span className="w-12 text-right">{m.completion_pct.toFixed(0)}%</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {m.total_completed > 0 ? `${m.avg_completion_days}d` : <span className="text-muted-foreground">—</span>}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
+
+            {/* Share of requisitions handled */}
+            <div className="border-t p-5">
+              <h3 className="text-sm font-semibold">Share of requisitions handled</h3>
+              <p className="text-xs text-muted-foreground mb-2">Percentage of all assigned requisitions handled by each member</p>
+              <ResponsiveContainer width="100%" height={280}>
+                <PieChart>
+                  <Pie
+                    data={memberPerformance.map(m => ({ name: m.assigned_to_name, value: m.total_assigned, pct: m.share_pct }))}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={90}
+                    dataKey="value"
+                    label={({ pct }) => `${pct}%`}
+                  >
+                    {memberPerformance.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip formatter={(value: number, name, item) => [`${value} requisitions (${item.payload.pct}%)`, name]} />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
           </CardContent>
         </Card>
       )}

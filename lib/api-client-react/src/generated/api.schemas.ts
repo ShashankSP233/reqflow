@@ -525,13 +525,14 @@ export interface StatusUpdateAnalytics {
 
 export interface PurchaseMemberPerformance {
   assigned_to_name: string;
+  total_assigned: number;
   total_completed: number;
-  low: number;
-  medium: number;
-  high: number;
-  urgent: number;
+  /** Completed divided by assigned, as a percentage. */
+  completion_pct: number;
   /** Average days from assignment to completion. */
   avg_completion_days: number;
+  /** This member's share of all assigned requisitions, as a percentage. */
+  share_pct: number;
 }
 
 export interface Holiday {

@@ -2056,29 +2056,28 @@ components:
       required:
         [
           assigned_to_name,
+          total_assigned,
           total_completed,
-          low,
-          medium,
-          high,
-          urgent,
+          completion_pct,
           avg_completion_days,
+          share_pct,
         ]
       properties:
         assigned_to_name:
           type: string
+        total_assigned:
+          type: integer
         total_completed:
           type: integer
-        low:
-          type: integer
-        medium:
-          type: integer
-        high:
-          type: integer
-        urgent:
-          type: integer
+        completion_pct:
+          type: number
+          description: Completed divided by assigned, as a percentage.
         avg_completion_days:
           type: number
           description: Average days from assignment to completion.
+        share_pct:
+          type: number
+          description: This member's share of all assigned requisitions, as a percentage.
 
     Holiday:
       type: object
