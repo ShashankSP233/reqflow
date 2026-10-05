@@ -128,13 +128,13 @@ export default function Dashboard() {
           <Link href="/requisitions?has_queries=true" className="block" data-testid="link-requisitions-with-queries">
             <Card className="h-full transition-colors hover:bg-accent/30">
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium">Requisitions with Queries</CardTitle>
+                <CardTitle className="text-sm font-medium">Requisitions with Open Queries</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center gap-2">
                   <MessageSquareText className="w-5 h-5 text-blue-600" />
                   <span className="text-2xl font-bold">{summary.requisitions_with_queries}</span>
-                  <span className="text-sm text-muted-foreground ml-2">View requests with query threads</span>
+                  <span className="text-sm text-muted-foreground ml-2">View requests awaiting query replies</span>
                 </div>
               </CardContent>
             </Card>

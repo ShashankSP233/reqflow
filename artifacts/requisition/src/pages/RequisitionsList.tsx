@@ -140,7 +140,7 @@ export default function RequisitionsList() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="has_queries">Has Queries</SelectItem>
+            <SelectItem value="has_queries">Has Open Queries</SelectItem>
             {STATUS_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
           </SelectContent>
         </Select>

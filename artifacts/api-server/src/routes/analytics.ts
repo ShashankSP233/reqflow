@@ -20,7 +20,7 @@ router.get("/analytics/summary", async (_req, res) => {
   const requisitionsWithQueriesRow = await db
     .select({ count: sql<number>`COUNT(*)::int` })
     .from(requisitionsTable)
-    .where(sql`EXISTS (
+    .where(sql`${requisitionsTable.status} <> 'completed' AND EXISTS (
       WITH RECURSIVE ancestors(id) AS (
         SELECT parent_requisition_id FROM requisition_partial_relations WHERE child_requisition_id = ${requisitionsTable.id}
         UNION ALL
@@ -28,7 +28,8 @@ router.get("/analytics/summary", async (_req, res) => {
         INNER JOIN ancestors ON relation.child_requisition_id = ancestors.id
       )
       SELECT 1 FROM queries q
-      WHERE q.requisition_id = ${requisitionsTable.id} OR q.requisition_id IN (SELECT id FROM ancestors)
+      WHERE q.is_resolved IS FALSE
+        AND (q.requisition_id = ${requisitionsTable.id} OR q.requisition_id IN (SELECT id FROM ancestors))
     )`);
 
   const resolutionRow = await db
