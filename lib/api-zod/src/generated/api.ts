@@ -189,6 +189,7 @@ export const ListRequisitionsQueryParams = zod.object({
   "checker_id": zod.coerce.number().int().optional(),
   "project_id": zod.coerce.number().int().optional(),
   "needs_action": zod.coerce.boolean().optional().describe('Returns requisitions awaiting an action for the authenticated user\'s role.'),
+  "has_queries": zod.coerce.boolean().optional().describe('Returns requisitions with at least one query thread.'),
   "search": zod.coerce.string().optional().describe('Matches ref number, requester, purpose, site, item names, or vessel\/equipment\/location names.')
 })
 
@@ -1555,6 +1556,7 @@ export const GetAnalyticsSummaryResponse = zod.object({
   "in_progress": zod.int(),
   "completed": zod.int(),
   "urgent_count": zod.int(),
+  "requisitions_with_queries": zod.int(),
   "avg_resolution_days": zod.number(),
   "total_expected_value": zod.number().optional()
 })

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { requisitionsTable, holidaysTable, projectsTable, statusUpdatesTable } from "@workspace/db";
+import { requisitionsTable, holidaysTable, projectsTable, statusUpdatesTable, queriesTable } from "@workspace/db";
 import { sql, eq, isNotNull, inArray } from "drizzle-orm";
 import { computeCompliance, todayIST } from "../lib/business-days";
 
@@ -16,6 +16,20 @@ router.get("/analytics/summary", async (_req, res) => {
     .select({ count: sql<number>`COUNT(*)::int` })
     .from(requisitionsTable)
     .where(eq(requisitionsTable.priority, "urgent"));
+
+  const requisitionsWithQueriesRow = await db
+    .select({ count: sql<number>`COUNT(*)::int` })
+    .from(requisitionsTable)
+    .where(sql`EXISTS (
+      WITH RECURSIVE ancestors(id) AS (
+        SELECT parent_requisition_id FROM requisition_partial_relations WHERE child_requisition_id = ${requisitionsTable.id}
+        UNION ALL
+        SELECT relation.parent_requisition_id FROM requisition_partial_relations relation
+        INNER JOIN ancestors ON relation.child_requisition_id = ancestors.id
+      )
+      SELECT 1 FROM queries q
+      WHERE q.requisition_id = ${requisitionsTable.id} OR q.requisition_id IN (SELECT id FROM ancestors)
+    )`);
 
   const resolutionRow = await db
     .select({ avg: sql<number>`AVG(EXTRACT(EPOCH FROM (approved_at - created_at))/86400)::float` })
@@ -43,6 +57,7 @@ router.get("/analytics/summary", async (_req, res) => {
     in_progress: counts["in_progress"] ?? 0,
     completed: counts["completed"] ?? 0,
     urgent_count: urgentRow[0]?.count ?? 0,
+    requisitions_with_queries: requisitionsWithQueriesRow[0]?.count ?? 0,
     avg_resolution_days: resolutionRow[0]?.avg ?? 0,
     total_expected_value: totalCostRow[0]?.total ?? 0,
   });

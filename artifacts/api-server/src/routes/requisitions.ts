@@ -207,7 +207,7 @@ const baseSelect = {
 
 // ── List ─────────────────────────────────────────────────────────────────────
 router.get("/requisitions", async (req, res) => {
-  const { status, priority, raised_by_id, assigned_to_id, checker1_id, checker2_id, approver_id, checker_id, project_id, search, needs_action } = req.query;
+  const { status, priority, raised_by_id, assigned_to_id, checker1_id, checker2_id, approver_id, checker_id, project_id, search, needs_action, has_queries } = req.query;
   const conditions = [];
   if (status) conditions.push(eq(requisitionsTable.status, String(status)));
   if (priority) conditions.push(eq(requisitionsTable.priority, String(priority)));
@@ -217,6 +217,18 @@ router.get("/requisitions", async (req, res) => {
   if (checker2_id) conditions.push(eq(requisitionsTable.checker2_id, Number(checker2_id)));
   if (approver_id) conditions.push(eq(requisitionsTable.approver_id, Number(approver_id)));
   if (project_id) conditions.push(eq(requisitionsTable.project_id, Number(project_id)));
+  if (has_queries === "true") {
+    conditions.push(sql`EXISTS (
+      WITH RECURSIVE ancestors(id) AS (
+        SELECT parent_requisition_id FROM requisition_partial_relations WHERE child_requisition_id = ${requisitionsTable.id}
+        UNION ALL
+        SELECT relation.parent_requisition_id FROM requisition_partial_relations relation
+        INNER JOIN ancestors ON relation.child_requisition_id = ancestors.id
+      )
+      SELECT 1 FROM queries q
+      WHERE q.requisition_id = ${requisitionsTable.id} OR q.requisition_id IN (SELECT id FROM ancestors)
+    )`);
+  }
   // A checker can be checker1 on one requisition and checker2 on another —
   // this matches either role for the same person in a single query.
   if (checker_id) conditions.push(or(eq(requisitionsTable.checker1_id, Number(checker_id)), eq(requisitionsTable.checker2_id, Number(checker_id))));

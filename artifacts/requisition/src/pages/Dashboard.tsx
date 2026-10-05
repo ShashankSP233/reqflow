@@ -4,7 +4,7 @@ import { Link } from "wouter";
 import { StatusBadge } from "@/components/requisition/StatusBadge";
 import { PriorityBadge } from "@/components/requisition/PriorityBadge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Clock, IndianRupee, FileText, CheckCircle2, AlertTriangle, Hourglass, PlusCircle, PauseCircle } from "lucide-react";
+import { Clock, FileText, CheckCircle2, AlertTriangle, Hourglass, PlusCircle, PauseCircle, MessageSquareText } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRole } from "@/context/RoleContext";
 
@@ -112,18 +112,34 @@ export default function Dashboard() {
       )}
 
       {summary && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Avg. Resolution Time</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <Clock className="w-5 h-5 text-muted-foreground" />
-              <span className="text-2xl font-bold">{summary.avg_resolution_days?.toFixed(1) ?? "—"} days</span>
-              <span className="text-sm text-muted-foreground ml-2">from creation to approval</span>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium">Avg. Resolution Time</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2">
+                <Clock className="w-5 h-5 text-muted-foreground" />
+                <span className="text-2xl font-bold">{summary.avg_resolution_days?.toFixed(1) ?? "—"} days</span>
+                <span className="text-sm text-muted-foreground ml-2">from creation to approval</span>
+              </div>
+            </CardContent>
+          </Card>
+          <Link href="/requisitions?has_queries=true" className="block" data-testid="link-requisitions-with-queries">
+            <Card className="h-full transition-colors hover:bg-accent/30">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium">Requisitions with Queries</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-2">
+                  <MessageSquareText className="w-5 h-5 text-blue-600" />
+                  <span className="text-2xl font-bold">{summary.requisitions_with_queries}</span>
+                  <span className="text-sm text-muted-foreground ml-2">View requests with query threads</span>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+        </div>
       )}
 
       <Card>

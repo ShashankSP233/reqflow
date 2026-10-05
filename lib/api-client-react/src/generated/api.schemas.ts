@@ -444,6 +444,7 @@ export interface AnalyticsSummary {
   in_progress: number;
   completed: number;
   urgent_count: number;
+  requisitions_with_queries: number;
   avg_resolution_days: number;
   total_expected_value?: number;
 }
@@ -587,6 +588,10 @@ project_id?: number;
  * Returns requisitions awaiting an action for the authenticated user's role.
  */
 needs_action?: boolean;
+/**
+ * Returns requisitions with at least one query thread.
+ */
+has_queries?: boolean;
 /**
  * Matches ref number, requester, purpose, site, item names, or vessel/equipment/location names.
  */

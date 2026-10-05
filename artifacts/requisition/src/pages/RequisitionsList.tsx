@@ -38,7 +38,7 @@ const LIST_PREFERENCES_KEY = "reqflow:requisitions-list";
 function readListPreferences(userId: number) {
   try {
     const saved = sessionStorage.getItem(`${LIST_PREFERENCES_KEY}:${userId}`);
-    if (saved) return JSON.parse(saved) as { searchInput?: string; statusFilter?: string; priorityFilter?: string; tab?: string };
+    if (saved) return JSON.parse(saved) as { searchInput?: string; statusFilter?: string; priorityFilter?: string; hasQueriesFilter?: string; tab?: string };
   } catch {
     // Ignore unavailable or invalid session storage and use the defaults.
   }
@@ -49,6 +49,7 @@ export default function RequisitionsList() {
   const { user } = useRole();
   const { toast } = useToast();
   const savedPreferences = readListPreferences(user.id);
+  const hasQueriesFromUrl = new URLSearchParams(window.location.search).get("has_queries") === "true";
   const clearDraft = () => {
   localStorage.removeItem(DRAFT_KEY);
     toast({
@@ -58,7 +59,7 @@ export default function RequisitionsList() {
   };
   const [searchInput, setSearchInput] = useState(savedPreferences.searchInput ?? "");
   const [search, setSearch] = useState(savedPreferences.searchInput ?? "");
-  const [statusFilter, setStatusFilter] = useState(savedPreferences.statusFilter ?? "all");
+  const [statusFilter, setStatusFilter] = useState(hasQueriesFromUrl || savedPreferences.hasQueriesFilter === "yes" ? "has_queries" : savedPreferences.statusFilter ?? "all");
   const [priorityFilter, setPriorityFilter] = useState(savedPreferences.priorityFilter ?? "all");
   const [tab, setTab] = useState(savedPreferences.tab === "action" ? "action" : "all");
 
@@ -78,7 +79,8 @@ export default function RequisitionsList() {
   }, [searchInput]);
 
   const params: Record<string, string | number | boolean | undefined> = {};
-  if (statusFilter !== "all") params.status = statusFilter;
+  if (statusFilter === "has_queries") params.has_queries = true;
+  else if (statusFilter !== "all") params.status = statusFilter;
   if (priorityFilter !== "all") params.priority = priorityFilter;
   if (user.role === "site_user") params.raised_by_id = user.id;
   // if (user.role === "purchase_member") params.assigned_to_id = user.id;
@@ -138,6 +140,7 @@ export default function RequisitionsList() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="has_queries">Has Queries</SelectItem>
             {STATUS_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
           </SelectContent>
         </Select>
