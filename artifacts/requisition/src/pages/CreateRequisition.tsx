@@ -41,9 +41,7 @@ const itemSchema = z.object({
 
 const formSchema = z.object({
   project_id: z.coerce.number({ required_error: "Project is required", invalid_type_error: "Project is required" }).min(1, "Project is required"),
-  site_id: z.coerce.number().optional(),
-  raised_by_name: z.string().min(1, "Requester name is required"),
-  site_name: z.string().optional(),
+  site_id: z.coerce.number({ required_error: "Site is required", invalid_type_error: "Site is required" }).min(1, "Site is required"),
   requisition_date: z.string().min(1, "Date is required"),
   priority: z.enum(["low", "medium", "high", "urgent"]),
   purpose: z.string().optional(),
@@ -72,8 +70,6 @@ export default function CreateRequisition() {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      raised_by_name: user.name,
-      site_name: user.site_name ?? "",
       requisition_date: today,
       priority: "medium",
       items: [{ item_name: "", quantity: 1, unit: "", reference_no: "", expected_cost: undefined, description: "", remark: "", asset_id: undefined, asset_name: "" }],
@@ -125,10 +121,7 @@ export default function CreateRequisition() {
       {
         data: {
           project_id: values.project_id,
-          site_id: values.site_id || null,
-          raised_by_id: user.id,
-          raised_by_name: values.raised_by_name,
-          site_name: values.site_name,
+          site_id: values.site_id,
           requisition_date: values.requisition_date,
           priority: values.priority,
           purpose: values.purpose,
@@ -158,7 +151,7 @@ export default function CreateRequisition() {
                 const fd = new FormData();
                 fd.append("file", file);
                 return fetch(
-                  `/api/upload/${newReq.id}?context=requisition&uploaded_by=${encodeURIComponent(values.raised_by_name)}`,
+                  `/api/upload/${newReq.id}?context=requisition&uploaded_by=${encodeURIComponent(user.name)}`,
                   { method: "POST", body: fd }
                 ).then((res) => { if (!res.ok) throw new Error("upload failed"); });
               })
@@ -228,18 +221,30 @@ export default function CreateRequisition() {
               <CardDescription>Common details for this requisition</CardDescription>
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField control={form.control} name="raised_by_name" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Raised By <span className="text-destructive">*</span></FormLabel>
-                  <FormControl><Input {...field} data-testid="input-raised-by" /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
+              <div className="space-y-2">
+                <label htmlFor="input-raised-by" className="text-sm font-medium leading-none">Raised By</label>
+                <Input id="input-raised-by" value={user.name} readOnly aria-readonly="true" className="bg-muted/40 cursor-not-allowed" data-testid="input-raised-by" />
+              </div>
 
-              <FormField control={form.control} name="site_name" render={({ field }) => (
+              <FormField control={form.control} name="site_id" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Site Name</FormLabel>
-                  <FormControl><Input placeholder="e.g. Site A - Pune Highway" {...field} data-testid="input-site-name" /></FormControl>
+                  <FormLabel>Site <span className="text-destructive">*</span></FormLabel>
+                  <Select
+                    value={field.value ? String(field.value) : ""}
+                    onValueChange={(value) => field.onChange(value ? Number(value) : undefined)}
+                    disabled={!sites?.length}
+                  >
+                    <FormControl>
+                      <SelectTrigger data-testid="select-site">
+                        <SelectValue placeholder={!sites ? "Loading sites..." : sites.length ? "Select site" : "No sites available"} />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {sites?.map((site) => (
+                        <SelectItem key={site.id} value={String(site.id)}>{site.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )} />

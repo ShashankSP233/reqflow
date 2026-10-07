@@ -243,9 +243,7 @@ export const ListRequisitionsResponse = zod.array(ListRequisitionsResponseItem)
 
 export const CreateRequisitionBody = zod.object({
   "project_id": zod.int(),
-  "site_id": zod.int().nullish(),
-  "raised_by_id": zod.int().nullish(),
-  "raised_by_name": zod.string(),
+  "site_id": zod.int(),
   "site_name": zod.string().optional(),
   "requisition_date": zod.string(),
   "priority": zod.string().optional(),

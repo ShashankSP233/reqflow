@@ -312,11 +312,7 @@ export interface RequisitionItemInput {
 
 export interface RequisitionInput {
   project_id: number;
-  /** @nullable */
-  site_id?: number | null;
-  /** @nullable */
-  raised_by_id?: number | null;
-  raised_by_name: string;
+  site_id: number;
   site_name?: string;
   requisition_date: string;
   priority?: string;

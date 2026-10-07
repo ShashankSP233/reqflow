@@ -1512,16 +1512,12 @@ components:
 
     RequisitionInput:
       type: object
-      required: [project_id, raised_by_name, requisition_date]
+      required: [project_id, site_id, requisition_date]
       properties:
         project_id:
           type: integer
         site_id:
-          type: ["integer", "null"]
-        raised_by_id:
-          type: ["integer", "null"]
-        raised_by_name:
-          type: string
+          type: integer
         site_name:
           type: string
         requisition_date:

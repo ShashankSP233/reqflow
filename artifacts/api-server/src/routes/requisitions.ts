@@ -299,13 +299,30 @@ router.get("/requisitions", async (req, res) => {
 
 // ── Create ────────────────────────────────────────────────────────────────────
 router.post("/requisitions", async (req, res) => {
+  const currentUser = req.currentUser;
+  if (!currentUser) {
+    res.status(401).json({ error: "Not logged in" });
+    return;
+  }
+
   const {
-    project_id, site_id, raised_by_id, raised_by_name, site_name,
+    project_id, site_id,
     requisition_date, priority, purpose, notes, items = []
   } = req.body;
 
-  if (!project_id || !raised_by_name || !requisition_date) {
-    res.status(400).json({ error: "project_id, raised_by_name and requisition_date are required" });
+  if (!project_id || !site_id || !requisition_date) {
+    res.status(400).json({ error: "project_id, site_id and requisition_date are required" });
+    return;
+  }
+
+  if (!Number.isInteger(site_id) || site_id < 1) {
+    res.status(400).json({ error: "site_id must identify a stored site" });
+    return;
+  }
+
+  const [site] = await db.select({ name: sitesTable.name }).from(sitesTable).where(eq(sitesTable.id, site_id)).limit(1);
+  if (!site) {
+    res.status(400).json({ error: "The selected site does not exist" });
     return;
   }
 
@@ -323,10 +340,10 @@ router.post("/requisitions", async (req, res) => {
   const [req_row] = await db.insert(requisitionsTable).values({
     ref_number,
     project_id: project_id ?? null,
-    site_id: site_id || null,
-    raised_by_id: raised_by_id ?? null,
-    raised_by_name,
-    site_name: site_name ?? null,
+    site_id,
+    raised_by_id: currentUser.id,
+    raised_by_name: currentUser.name,
+    site_name: site.name,
     requisition_date,
     priority: priority ?? "medium",
     purpose: purpose ?? null,
