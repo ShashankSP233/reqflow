@@ -649,6 +649,72 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getCreateProjectMutationOptions(options));
     }
 
+export const getUpdateProjectUrl = (id: number,) => {
+
+
+
+
+  return `/api/projects/${id}`
+}
+
+export const updateProject = async (id: number,
+    projectInput: ProjectInput, options?: Parameters<typeof customFetch>[1]): Promise<Project> => {
+
+  return customFetch<Project>(getUpdateProjectUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(projectInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateProjectMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProject>>, TError,{id: number;data: ProjectInput}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateProject>>, TError,{id: number;data: ProjectInput}, TContext> => {
+
+const mutationKey = ['updateProject'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateProject>>, {id: number;data: ProjectInput}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateProject(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateProjectMutationResult = NonNullable<Awaited<ReturnType<typeof updateProject>>>
+    export type UpdateProjectMutationBody = ProjectInput
+    export type UpdateProjectMutationError = unknown
+
+    export const useUpdateProject = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProject>>, TError,{id: number;data: ProjectInput}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateProject>>,
+        TError,
+        {id: number;data: ProjectInput},
+        TContext
+      > => {
+      return useMutation(getUpdateProjectMutationOptions(options));
+    }
+
 export const getListSitesUrl = () => {
 
 
@@ -783,6 +849,72 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getCreateSiteMutationOptions(options));
+    }
+
+export const getUpdateSiteUrl = (id: number,) => {
+
+
+
+
+  return `/api/sites/${id}`
+}
+
+export const updateSite = async (id: number,
+    siteInput: SiteInput, options?: Parameters<typeof customFetch>[1]): Promise<Site> => {
+
+  return customFetch<Site>(getUpdateSiteUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(siteInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateSiteMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSite>>, TError,{id: number;data: SiteInput}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateSite>>, TError,{id: number;data: SiteInput}, TContext> => {
+
+const mutationKey = ['updateSite'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateSite>>, {id: number;data: SiteInput}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateSite(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateSiteMutationResult = NonNullable<Awaited<ReturnType<typeof updateSite>>>
+    export type UpdateSiteMutationBody = SiteInput
+    export type UpdateSiteMutationError = unknown
+
+    export const useUpdateSite = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSite>>, TError,{id: number;data: SiteInput}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateSite>>,
+        TError,
+        {id: number;data: SiteInput},
+        TContext
+      > => {
+      return useMutation(getUpdateSiteMutationOptions(options));
     }
 
 export const getListUsersUrl = (params?: ListUsersParams,) => {
@@ -3998,6 +4130,72 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getCreateHolidayMutationOptions(options));
+    }
+
+export const getUpdateHolidayUrl = (id: number,) => {
+
+
+
+
+  return `/api/holidays/${id}`
+}
+
+export const updateHoliday = async (id: number,
+    holidayInput: HolidayInput, options?: Parameters<typeof customFetch>[1]): Promise<Holiday> => {
+
+  return customFetch<Holiday>(getUpdateHolidayUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(holidayInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateHolidayMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateHoliday>>, TError,{id: number;data: HolidayInput}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateHoliday>>, TError,{id: number;data: HolidayInput}, TContext> => {
+
+const mutationKey = ['updateHoliday'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateHoliday>>, {id: number;data: HolidayInput}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateHoliday(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateHolidayMutationResult = NonNullable<Awaited<ReturnType<typeof updateHoliday>>>
+    export type UpdateHolidayMutationBody = HolidayInput
+    export type UpdateHolidayMutationError = unknown
+
+    export const useUpdateHoliday = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateHoliday>>, TError,{id: number;data: HolidayInput}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateHoliday>>,
+        TError,
+        {id: number;data: HolidayInput},
+        TContext
+      > => {
+      return useMutation(getUpdateHolidayMutationOptions(options));
     }
 
 export const getDeleteHolidayUrl = (id: number,) => {

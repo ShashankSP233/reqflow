@@ -23,3 +23,11 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   req.currentUser = { id: user.id, name: user.name, role: user.role, site_name: user.site_name };
   next();
 }
+
+export function requirePurchaseHead(req: Request, res: Response, next: NextFunction) {
+  if (req.currentUser?.role !== "purchase_head") {
+    res.status(403).json({ error: "Purchase Head access required" });
+    return;
+  }
+  next();
+}

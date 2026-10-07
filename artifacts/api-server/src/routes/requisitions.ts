@@ -320,7 +320,7 @@ router.post("/requisitions", async (req, res) => {
     return;
   }
 
-  const [site] = await db.select({ name: sitesTable.name }).from(sitesTable).where(eq(sitesTable.id, site_id)).limit(1);
+  const [site] = await db.select({ name: sitesTable.name, location: sitesTable.location }).from(sitesTable).where(eq(sitesTable.id, site_id)).limit(1);
   if (!site) {
     res.status(400).json({ error: "The selected site does not exist" });
     return;
@@ -343,7 +343,7 @@ router.post("/requisitions", async (req, res) => {
     site_id,
     raised_by_id: currentUser.id,
     raised_by_name: currentUser.name,
-    site_name: site.name,
+    site_name: site.location || site.name,
     requisition_date,
     priority: priority ?? "medium",
     purpose: purpose ?? null,

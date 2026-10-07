@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { assetsTable } from "@workspace/db";
 import { eq, or, isNull } from "drizzle-orm";
+import { requirePurchaseHead } from "../middlewares/require-auth";
 
 const router = Router();
 
@@ -16,14 +17,14 @@ router.get("/assets", async (req, res) => {
   res.json(rows);
 });
 
-router.post("/assets", async (req, res) => {
+router.post("/assets", requirePurchaseHead, async (req, res) => {
   const { name, type, project_id } = req.body;
   if (!name) { res.status(400).json({ error: "name required" }); return; }
   const [row] = await db.insert(assetsTable).values({ name, type: type ?? null, project_id: project_id ?? null }).returning();
   res.status(201).json(row);
 });
 
-router.patch("/assets/:id", async (req, res) => {
+router.patch("/assets/:id", requirePurchaseHead, async (req, res) => {
   const id = Number(req.params.id);
   const { name, type, project_id } = req.body;
   const updates: Record<string, unknown> = {};
@@ -35,7 +36,7 @@ router.patch("/assets/:id", async (req, res) => {
   res.json(row);
 });
 
-router.delete("/assets/:id", async (req, res) => {
+router.delete("/assets/:id", requirePurchaseHead, async (req, res) => {
   await db.delete(assetsTable).where(eq(assetsTable.id, Number(req.params.id)));
   res.status(204).send();
 });

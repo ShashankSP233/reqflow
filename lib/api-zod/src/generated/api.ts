@@ -85,6 +85,25 @@ export const CreateProjectResponse = zod.object({
 })
 
 
+export const UpdateProjectParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const UpdateProjectBody = zod.object({
+  "name": zod.string(),
+  "code": zod.string().optional(),
+  "company_id": zod.int().nullish()
+})
+
+export const UpdateProjectResponse = zod.object({
+  "id": zod.int(),
+  "name": zod.string(),
+  "code": zod.string().nullish(),
+  "company_id": zod.int().nullish(),
+  "company_name": zod.string().nullish()
+})
+
+
 export const ListSitesResponseItem = zod.object({
   "id": zod.int(),
   "name": zod.string(),
@@ -102,6 +121,25 @@ export const CreateSiteBody = zod.object({
 })
 
 export const CreateSiteResponse = zod.object({
+  "id": zod.int(),
+  "name": zod.string(),
+  "location": zod.string().nullish(),
+  "company_id": zod.int().nullish(),
+  "company_name": zod.string().nullish()
+})
+
+
+export const UpdateSiteParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const UpdateSiteBody = zod.object({
+  "name": zod.string(),
+  "location": zod.string().optional(),
+  "company_id": zod.int().nullish()
+})
+
+export const UpdateSiteResponse = zod.object({
   "id": zod.int(),
   "name": zod.string(),
   "location": zod.string().nullish(),
@@ -1676,6 +1714,22 @@ export const CreateHolidayBody = zod.object({
 })
 
 export const CreateHolidayResponse = zod.object({
+  "id": zod.int(),
+  "date": zod.string(),
+  "name": zod.string()
+})
+
+
+export const UpdateHolidayParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const UpdateHolidayBody = zod.object({
+  "date": zod.string(),
+  "name": zod.string()
+})
+
+export const UpdateHolidayResponse = zod.object({
   "id": zod.int(),
   "date": zod.string(),
   "name": zod.string()

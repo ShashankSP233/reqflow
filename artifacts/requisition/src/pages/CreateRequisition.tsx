@@ -241,7 +241,7 @@ export default function CreateRequisition() {
                     </FormControl>
                     <SelectContent>
                       {sites?.map((site) => (
-                        <SelectItem key={site.id} value={String(site.id)}>{site.name}</SelectItem>
+                        <SelectItem key={site.id} value={String(site.id)}>{site.location || site.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

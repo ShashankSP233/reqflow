@@ -59,7 +59,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       href: "/setup/companies",
       label: "Sites, Projects & Assets",
       icon: Ship,
-      roles: ["purchase_head", "approver"],
+      roles: ["purchase_head"],
     },
     {
       href: "/setup/users",
