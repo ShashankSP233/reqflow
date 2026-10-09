@@ -11,7 +11,7 @@ import { db } from "@workspace/db";
 import {
   requisitionsTable, requisitionItemsTable,
   projectsTable, sitesTable, attachmentsTable, queriesTable, queryRepliesTable, statusUpdatesTable,
-  approvalNotesTable, requisitionPartialRelationsTable, requisitionPartialRelationItemsTable,
+  approvalNotesTable, requisitionPartialRelationsTable, requisitionPartialRelationItemsTable, usersTable,
   holidaysTable, userProjectsTable
 } from "@workspace/db";
 import { eq, and, sql, inArray, or, notInArray, isNull } from "drizzle-orm";
@@ -549,7 +549,7 @@ router.patch("/requisitions/:id/priority", async (req, res) => {
 // ── Update ────────────────────────────────────────────────────────────────────
 router.patch("/requisitions/:id", async (req, res) => {
   const id = Number(req.params.id);
-  const { project_id, site_id, raised_by_name, site_name, requisition_date, priority, purpose, notes } = req.body;
+  const { project_id, site_id, raised_by_name, site_name, requisition_date, priority, purpose, notes, approver_id } = req.body;
 
   const [existing] = await db.select().from(requisitionsTable).where(eq(requisitionsTable.id, id));
   if (!existing) { res.status(404).json({ error: "Not found" }); return; }
@@ -567,6 +567,27 @@ router.patch("/requisitions/:id", async (req, res) => {
   if (priority !== undefined) updates.priority = priority;
   if (purpose !== undefined) updates.purpose = purpose;
   if (notes !== undefined) updates.notes = notes;
+  if (approver_id !== undefined) {
+    if (req.currentUser?.role !== "purchase_head") {
+      res.status(403).json({ error: "Only an admin can change the assigned approver" });
+      return;
+    }
+    const selectedApproverId = Number(approver_id);
+    if (!Number.isInteger(selectedApproverId) || selectedApproverId <= 0) {
+      res.status(400).json({ error: "Invalid approver ID" });
+      return;
+    }
+    const [selectedApprover] = await db
+      .select({ id: usersTable.id, name: usersTable.name, role: usersTable.role })
+      .from(usersTable)
+      .where(eq(usersTable.id, selectedApproverId));
+    if (!selectedApprover || selectedApprover.role !== "approver") {
+      res.status(400).json({ error: "Selected user is not an approver" });
+      return;
+    }
+    updates.approver_id = selectedApprover.id;
+    updates.approver_name = selectedApprover.name;
+  }
 
   const [updated] = await db.update(requisitionsTable).set(updates).where(eq(requisitionsTable.id, id)).returning();
   if (!updated) { res.status(404).json({ error: "Not found" }); return; }

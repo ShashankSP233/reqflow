@@ -29,6 +29,7 @@ import {
   useResolveQuery,
   useAddStatusUpdate,
   useDeleteRequisition,
+  useUpdateRequisition,
   useListUsers,
   getListRequisitionsQueryKey,
   getGetAnalyticsSummaryQueryKey,
@@ -84,6 +85,9 @@ export default function RequisitionDetail() {
   const [assignOpen, setAssignOpen] = useState(false);
   const [statusUpdateOpen, setStatusUpdateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [adminEditOpen, setAdminEditOpen] = useState(false);
+  const [adminPurpose, setAdminPurpose] = useState("");
+  const [adminApproverId, setAdminApproverId] = useState("");
   const [priorityOpen, setPriorityOpen] = useState(false);
   const [newPriority, setNewPriority] = useState("");
   const [approvalNoteOpen, setApprovalNoteOpen] = useState(false);
@@ -184,6 +188,7 @@ export default function RequisitionDetail() {
   const resolveMut = useResolveQuery();
   const statusUpdateMut = useAddStatusUpdate();
   const deleteMut = useDeleteRequisition();
+  const updateRequisitionMut = useUpdateRequisition();
 
   // Forms
   const submitForm = useForm({ defaultValues: { checker1_id: "", checker1_name: "", checker2_id: "", checker2_name: "", approver_id: "", approver_name: "" } });
@@ -897,6 +902,49 @@ export default function RequisitionDetail() {
                       onError: () => toast({ title: "Error", description: "Add a new approval note first.", variant: "destructive" }),
                     });
                   }} data-testid="button-confirm-complete">Confirm Close</Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          )}
+          {isPurchaseHead && (
+            <Dialog open={adminEditOpen} onOpenChange={(open) => {
+              setAdminEditOpen(open);
+              if (open) {
+                setAdminPurpose(req.purpose ?? "");
+                setAdminApproverId(req.approver_id ? String(req.approver_id) : "");
+              }
+            }}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline" className="gap-1.5" data-testid="button-edit-requisition-details">
+                  <Pencil className="w-3.5 h-3.5" />Edit Details
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader><DialogTitle>Edit Requisition Details</DialogTitle></DialogHeader>
+                <div className="space-y-4 mt-2">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium">Purpose</label>
+                    <Textarea value={adminPurpose} onChange={(e) => setAdminPurpose(e.target.value)} rows={3} data-testid="input-admin-requisition-purpose" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium">Approver</label>
+                    <Select value={adminApproverId} onValueChange={setAdminApproverId}>
+                      <SelectTrigger data-testid="select-admin-requisition-approver"><SelectValue placeholder="Select approver" /></SelectTrigger>
+                      <SelectContent>{approvers.map((approver) => <SelectItem key={approver.id} value={String(approver.id)}>{approver.name}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <Button className="w-full" disabled={updateRequisitionMut.isPending} onClick={() => {
+                    const data: { purpose: string; approver_id?: number } = { purpose: adminPurpose };
+                    if (adminApproverId && Number(adminApproverId) !== req.approver_id) data.approver_id = Number(adminApproverId);
+                    updateRequisitionMut.mutate({ id, data }, {
+                      onSuccess: () => {
+                        invalidate();
+                        setAdminEditOpen(false);
+                        toast({ title: "Requisition details updated" });
+                      },
+                      onError: (error) => toast({ title: "Update failed", description: error instanceof Error ? error.message : "Could not update requisition details", variant: "destructive" }),
+                    });
+                  }} data-testid="button-save-requisition-details">Save Changes</Button>
                 </div>
               </DialogContent>
             </Dialog>

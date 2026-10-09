@@ -1622,6 +1622,8 @@ components:
           type: string
         notes:
           type: string
+        approver_id:
+          type: integer
 
     RequisitionItem:
       type: object

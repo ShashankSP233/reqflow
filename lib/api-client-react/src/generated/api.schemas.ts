@@ -332,6 +332,7 @@ export interface RequisitionUpdate {
   priority?: string;
   purpose?: string;
   notes?: string;
+  approver_id?: number;
 }
 
 export interface SubmitInput {
