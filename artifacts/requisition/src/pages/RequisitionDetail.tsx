@@ -64,7 +64,7 @@ const STAGE_OPTIONS = [
   { value: "reviewed_person1", label: "Reviewed by Operations" },
   { value: "reviewed_person2", label: "Reviewed by Technical" },
   { value: "reviewed_person3", label: "Reviewed by External" },
-  { value: "reviewed_md", label: "Reviewed by MD" },
+  { value: "reviewed_md", label: "Reviewed by Managing Director (MD)" },
   { value: "reviewed_chairman", label: "Reviewed by Chairman" },
 ];
 

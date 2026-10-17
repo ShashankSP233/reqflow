@@ -227,13 +227,16 @@ router.get("/analytics/status-updates", async (_req, res) => {
     }
   }
 
-  const by_stage = Array.from(durationsByStage.entries())
-    .map(([stage, durations]) => ({
+  const by_stage = stageOrder.map(stage => {
+    const durations = durationsByStage.get(stage) ?? [];
+    return {
       stage,
-      avg_days: Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 10) / 10,
+      avg_days: durations.length
+        ? Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 10) / 10
+        : 0,
       requisition_count: durations.length,
-    }))
-    .sort((a, b) => a.avg_days - b.avg_days);
+    };
+  });
 
   res.json({ by_stage });
 });

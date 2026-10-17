@@ -19,10 +19,10 @@ const STAGE_LABELS: Record<string, string> = {
   checked: "Checked",
   reviewed_purchase: "Checked by Purchase",
   accounts_reviewed: "Reviewed by Accounts",
-  reviewed_person1: "Reviewed by Person 1",
-  reviewed_person2: "Reviewed by Person 2",
-  reviewed_person3: "Reviewed by Person 3",
-  reviewed_md: "Reviewed by MD",
+  reviewed_person1: "Reviewed by Operations",
+  reviewed_person2: "Reviewed by Technical",
+  reviewed_person3: "Reviewed by External",
+  reviewed_md: "Reviewed by Managing Director (MD)",
   reviewed_chairman: "Reviewed by Chairman",
 };
 
@@ -234,16 +234,18 @@ export default function Analytics() {
           <CardHeader>
             <CardTitle className="text-sm flex items-center gap-2">
               <ClipboardList className="w-4 h-4 text-primary" />
-              Average Time to Reach Each Stage
+              Average Time Between Workflow Stages
             </CardTitle>
             <CardDescription>Days from approval of the previous stage to first reaching each stage; assignment is the baseline for Prepared</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height={320}>
               <BarChart data={statusUpdateStats.by_stage.map(s => ({ name: STAGE_LABELS[s.stage] ?? s.stage, days: s.avg_days, n: s.requisition_count }))} layout="vertical" margin={{ left: 20 }}>
                 <XAxis type="number" tick={{ fontSize: 11 }} label={{ value: "Avg days", position: "insideBottom", offset: -5, fontSize: 11 }} />
-                <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={140} />
-                <Tooltip formatter={(value: number, _name, item) => [`${value} days (${item.payload.n} requisition${item.payload.n > 1 ? "s" : ""})`, "Avg time to reach"]} />
+                <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={190} />
+                <Tooltip formatter={(value: number, _name, item) => item.payload.n === 0
+                  ? ["No completed requisitions yet", "Timing unavailable"]
+                  : [`${value} days (${item.payload.n} requisition${item.payload.n > 1 ? "s" : ""})`, "Average duration"]} />
                 <Bar dataKey="days" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
