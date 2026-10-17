@@ -185,6 +185,7 @@ router.get("/analytics/status-updates", async (_req, res) => {
   const stageOrder = [
     "prepared",
     "checked",
+    "reviewed_purchase",
     "accounts_reviewed",
     "reviewed_person1",
     "reviewed_person2",
@@ -305,7 +306,7 @@ router.get("/analytics/overdue-updates", async (_req, res) => {
       site_name: requisitionsTable.site_name,
       assigned_to_name: requisitionsTable.assigned_to_name,
       assigned_at: requisitionsTable.assigned_at,
-      last_update_date: sql<string | null>`(
+      last_update_at: sql<Date | null>`(
         WITH RECURSIVE ancestors(id) AS (
           SELECT parent_requisition_id
           FROM requisition_partial_relations
@@ -315,7 +316,7 @@ router.get("/analytics/overdue-updates", async (_req, res) => {
           FROM requisition_partial_relations relation
           INNER JOIN ancestors ON relation.child_requisition_id = ancestors.id
         )
-        SELECT MAX(su.update_date)
+        SELECT MAX(su.created_at)
         FROM status_updates su
         WHERE su.requisition_id = ${requisitionsTable.id}
           OR su.requisition_id IN (SELECT id FROM ancestors)
@@ -327,14 +328,18 @@ router.get("/analytics/overdue-updates", async (_req, res) => {
   const withCompliance = rows
     .filter(r => r.assigned_at)
     .map(r => {
-      const lastActivityDate = r.last_update_date ?? toDateOnlyIST(r.assigned_at as Date);
+      // Use the actual update timestamp (the same timestamp shown in the
+      // status update history), since legacy update_date values may be stale.
+      const lastActivityDate = r.last_update_at
+        ? toDateOnlyIST(r.last_update_at)
+        : toDateOnlyIST(r.assigned_at as Date);
       const compliance = computeCompliance(lastActivityDate, holidaySet, todayStr);
       return {
         id: r.id,
         ref_number: r.ref_number,
         site_name: r.site_name,
         assigned_to_name: r.assigned_to_name,
-        last_update_date: r.last_update_date,
+        last_update_date: r.last_update_at ? lastActivityDate : null,
         business_days_overdue: compliance.business_days_overdue,
         due_today: compliance.due_today,
       };

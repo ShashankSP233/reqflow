@@ -429,8 +429,12 @@ router.get("/requisitions/:id", async (req, res) => {
   if (rows[0].status === "in_progress" && rows[0].assigned_at) {
     const holidayRows = await db.select().from(holidaysTable);
     const holidaySet = new Set(holidayRows.map(h => h.date));
-    const lastUpdateDate = statusUpdates.length > 0
-      ? statusUpdates.reduce((max, u) => (u.update_date > max ? u.update_date : max), statusUpdates[0].update_date)
+    const latestStatusUpdate = statusUpdates.reduce<Date | null>(
+      (latest, update) => !latest || update.created_at > latest ? update.created_at : latest,
+      null,
+    );
+    const lastUpdateDate = latestStatusUpdate
+      ? toDateOnlyIST(latestStatusUpdate)
       : toDateOnlyIST(rows[0].assigned_at as unknown as Date);
     compliance = computeCompliance(lastUpdateDate, holidaySet, todayIST());
   }

@@ -17,6 +17,7 @@ const PIE_COLORS = ["#3b82f6", "#f59e0b", "#a855f7", "#10b981", "#ef4444", "#06b
 const STAGE_LABELS: Record<string, string> = {
   prepared: "Prepared",
   checked: "Checked",
+  reviewed_purchase: "Checked by Purchase",
   accounts_reviewed: "Reviewed by Accounts",
   reviewed_person1: "Reviewed by Person 1",
   reviewed_person2: "Reviewed by Person 2",
@@ -235,7 +236,7 @@ export default function Analytics() {
               <ClipboardList className="w-4 h-4 text-primary" />
               Average Time to Reach Each Stage
             </CardTitle>
-            <CardDescription>Days from assignment to first reaching each status-update stage, averaged across requisitions</CardDescription>
+            <CardDescription>Days from approval of the previous stage to first reaching each stage; assignment is the baseline for Prepared</CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={260}>

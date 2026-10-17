@@ -59,7 +59,7 @@ import { useRole } from "@/context/RoleContext";
 
 const STAGE_OPTIONS = [
   { value: "checked", label: "Checked" },
-  { value: "reviewed_purchase", label: "Reviewed by Purchase" },
+  { value: "reviewed_purchase", label: "Checked by Purchase" },
   { value: "accounts_reviewed", label: "Reviewed by Accounts" },
   { value: "reviewed_person1", label: "Reviewed by Operations" },
   { value: "reviewed_person2", label: "Reviewed by Technical" },
