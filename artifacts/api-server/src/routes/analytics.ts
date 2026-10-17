@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { requisitionsTable, holidaysTable, projectsTable, statusUpdatesTable, queriesTable } from "@workspace/db";
 import { sql, eq, isNotNull, inArray } from "drizzle-orm";
-import { computeCompliance, todayIST } from "../lib/business-days";
+import { computeCompliance, todayIST, toDateOnlyIST } from "../lib/business-days";
 
 const router = Router();
 
@@ -169,10 +169,9 @@ router.get("/analytics/on-hold", async (_req, res) => {
 // Point 15: analytics specifically about the daily status-update process —
 // who's actually filing updates, and how the stages break down.
 router.get("/analytics/status-updates", async (_req, res) => {
-  // For each stage (prepared, checked, reviewed by accounts, ...), how long
-  // does it typically take to reach it, counted from when the requisition
-  // was assigned? Computed in JS from simple queries rather than a nested
-  // SQL subquery, to keep this easy to verify is actually correct.
+  // For each stage, measure the time since approval of the immediately
+  // preceding stage. Assignment time is the baseline for the first stage.
+  // Compute this in JS so missing or out-of-order timestamps can be skipped.
   const rows = await db
     .select({
       requisition_id: statusUpdatesTable.requisition_id,
@@ -183,22 +182,48 @@ router.get("/analytics/status-updates", async (_req, res) => {
     .from(statusUpdatesTable)
     .innerJoin(requisitionsTable, eq(requisitionsTable.id, statusUpdatesTable.requisition_id));
 
+  const stageOrder = [
+    "prepared",
+    "checked",
+    "accounts_reviewed",
+    "reviewed_person1",
+    "reviewed_person2",
+    "reviewed_person3",
+    "reviewed_md",
+    "reviewed_chairman",
+  ];
+
   // Keep only the EARLIEST time each requisition reached each stage.
-  const firstReached = new Map<string, { stage: string; assignedAt: Date; firstAt: Date }>();
+  const firstReached = new Map<string, { stage: string; at: Date }>();
+  const assignedAtByRequisition = new Map<number, Date>();
   for (const r of rows) {
-    if (!r.assigned_at) continue;
+    if (r.assigned_at) assignedAtByRequisition.set(r.requisition_id, r.assigned_at);
     const key = `${r.requisition_id}::${r.stage}`;
     const existing = firstReached.get(key);
-    if (!existing || r.created_at < existing.firstAt) {
-      firstReached.set(key, { stage: r.stage, assignedAt: r.assigned_at, firstAt: r.created_at });
+    if (!existing || r.created_at < existing.at) {
+      firstReached.set(key, { stage: r.stage, at: r.created_at });
     }
   }
 
   const durationsByStage = new Map<string, number[]>();
-  for (const { stage, assignedAt, firstAt } of firstReached.values()) {
-    const days = (firstAt.getTime() - assignedAt.getTime()) / (1000 * 60 * 60 * 24);
-    if (!durationsByStage.has(stage)) durationsByStage.set(stage, []);
-    durationsByStage.get(stage)!.push(Math.max(0, days));
+  const requisitionIds = new Set(rows.map(r => r.requisition_id));
+  for (const requisitionId of requisitionIds) {
+    for (let index = 0; index < stageOrder.length; index++) {
+      const stage = stageOrder[index];
+      const current = firstReached.get(`${requisitionId}::${stage}`);
+      if (!current) continue;
+
+      const previousAt = index === 0
+        ? assignedAtByRequisition.get(requisitionId)
+        : firstReached.get(`${requisitionId}::${stageOrder[index - 1]}`)?.at;
+      if (!previousAt) continue;
+
+      const elapsedMs = current.at.getTime() - previousAt.getTime();
+      if (elapsedMs < 0) continue;
+
+      if (!durationsByStage.has(stage)) durationsByStage.set(stage, []);
+      durationsByStage.get(stage)!.push(elapsedMs / (1000 * 60 * 60 * 24));
+    }
   }
 
   const by_stage = Array.from(durationsByStage.entries())
@@ -280,7 +305,21 @@ router.get("/analytics/overdue-updates", async (_req, res) => {
       site_name: requisitionsTable.site_name,
       assigned_to_name: requisitionsTable.assigned_to_name,
       assigned_at: requisitionsTable.assigned_at,
-      last_update_date: sql<string | null>`(SELECT MAX(su.update_date) FROM status_updates su WHERE su.requisition_id = ${requisitionsTable.id})`,
+      last_update_date: sql<string | null>`(
+        WITH RECURSIVE ancestors(id) AS (
+          SELECT parent_requisition_id
+          FROM requisition_partial_relations
+          WHERE child_requisition_id = ${requisitionsTable.id}
+          UNION ALL
+          SELECT relation.parent_requisition_id
+          FROM requisition_partial_relations relation
+          INNER JOIN ancestors ON relation.child_requisition_id = ancestors.id
+        )
+        SELECT MAX(su.update_date)
+        FROM status_updates su
+        WHERE su.requisition_id = ${requisitionsTable.id}
+          OR su.requisition_id IN (SELECT id FROM ancestors)
+      )`,
     })
     .from(requisitionsTable)
     .where(eq(requisitionsTable.status, "in_progress"));
@@ -288,7 +327,7 @@ router.get("/analytics/overdue-updates", async (_req, res) => {
   const withCompliance = rows
     .filter(r => r.assigned_at)
     .map(r => {
-      const lastActivityDate = r.last_update_date ?? (r.assigned_at as Date).toISOString().split("T")[0];
+      const lastActivityDate = r.last_update_date ?? toDateOnlyIST(r.assigned_at as Date);
       const compliance = computeCompliance(lastActivityDate, holidaySet, todayStr);
       return {
         id: r.id,
