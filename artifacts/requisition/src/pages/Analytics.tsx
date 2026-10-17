@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/requisition/StatusBadge";
 import { PriorityBadge } from "@/components/requisition/PriorityBadge";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LabelList } from "recharts";
 import { useRole } from "@/context/RoleContext";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +25,14 @@ const STAGE_LABELS: Record<string, string> = {
   reviewed_md: "Reviewed by Managing Director (MD)",
   reviewed_chairman: "Reviewed by Chairman",
 };
+
+function formatStageDuration(days: number): string {
+  const minutes = Math.round(days * 24 * 60);
+  if (minutes < 1) return "<1 min";
+  if (minutes < 60) return `${minutes} min`;
+  if (days < 1) return `${(days * 24).toFixed(1)} hr`;
+  return `${days.toFixed(1)} days`;
+}
 
 export default function Analytics() {
   const { user } = useRole();
@@ -236,17 +244,19 @@ export default function Analytics() {
               <ClipboardList className="w-4 h-4 text-primary" />
               Average Time Between Workflow Stages
             </CardTitle>
-            <CardDescription>Days from approval of the previous stage to first reaching each stage; assignment is the baseline for Prepared</CardDescription>
+            <CardDescription>Checked by Purchase measures approval to Purchase Head assignment. Other stages measure time from the previous stage; Prepared starts at assignment.</CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={320}>
-              <BarChart data={statusUpdateStats.by_stage.map(s => ({ name: STAGE_LABELS[s.stage] ?? s.stage, days: s.avg_days, n: s.requisition_count }))} layout="vertical" margin={{ left: 20 }}>
-                <XAxis type="number" tick={{ fontSize: 11 }} label={{ value: "Avg days", position: "insideBottom", offset: -5, fontSize: 11 }} />
+              <BarChart data={statusUpdateStats.by_stage.map(s => ({ name: STAGE_LABELS[s.stage] ?? s.stage, days: s.avg_days, durationLabel: s.requisition_count ? formatStageDuration(s.avg_days) : "No data", n: s.requisition_count }))} layout="vertical" margin={{ left: 20, right: 70 }}>
+                <XAxis type="number" tick={{ fontSize: 11 }} label={{ value: "Average duration (days)", position: "insideBottom", offset: -5, fontSize: 11 }} />
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={190} />
                 <Tooltip formatter={(value: number, _name, item) => item.payload.n === 0
-                  ? ["No completed requisitions yet", "Timing unavailable"]
-                  : [`${value} days (${item.payload.n} requisition${item.payload.n > 1 ? "s" : ""})`, "Average duration"]} />
-                <Bar dataKey="days" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+                  ? ["No valid timing data", "Timing unavailable"]
+                  : [`${formatStageDuration(value)} (${item.payload.n} requisition${item.payload.n > 1 ? "s" : ""})`, "Average duration"]} />
+                <Bar dataKey="days" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]}>
+                  <LabelList dataKey="durationLabel" position="right" fontSize={10} />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </CardContent>

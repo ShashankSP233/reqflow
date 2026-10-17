@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { requisitionsTable, holidaysTable, projectsTable, statusUpdatesTable, queriesTable } from "@workspace/db";
-import { sql, eq, isNotNull, inArray } from "drizzle-orm";
+import { sql, eq, isNotNull, inArray, and } from "drizzle-orm";
 import { computeCompliance, todayIST, toDateOnlyIST } from "../lib/business-days";
 
 const router = Router();
@@ -182,6 +182,17 @@ router.get("/analytics/status-updates", async (_req, res) => {
     .from(statusUpdatesTable)
     .innerJoin(requisitionsTable, eq(requisitionsTable.id, statusUpdatesTable.requisition_id));
 
+  // "Checked by Purchase" is the handoff from approver approval to Purchase
+  // Head assignment, so calculate it from workflow timestamps, not a status
+  // update submitted by the purchase member.
+  const purchaseHandoffRows = await db
+    .select({
+      approved_at: requisitionsTable.approved_at,
+      assigned_at: requisitionsTable.assigned_at,
+    })
+    .from(requisitionsTable)
+    .where(and(isNotNull(requisitionsTable.approved_at), isNotNull(requisitionsTable.assigned_at)));
+
   const stageOrder = [
     "prepared",
     "checked",
@@ -211,6 +222,7 @@ router.get("/analytics/status-updates", async (_req, res) => {
   for (const requisitionId of requisitionIds) {
     for (let index = 0; index < stageOrder.length; index++) {
       const stage = stageOrder[index];
+      if (stage === "reviewed_purchase") continue;
       const current = firstReached.get(`${requisitionId}::${stage}`);
       if (!current) continue;
 
@@ -227,12 +239,19 @@ router.get("/analytics/status-updates", async (_req, res) => {
     }
   }
 
+  const purchaseHandoffDurations = purchaseHandoffRows.flatMap(({ approved_at, assigned_at }) => {
+    if (!approved_at || !assigned_at) return [];
+    const elapsedMs = assigned_at.getTime() - approved_at.getTime();
+    return elapsedMs >= 0 ? [elapsedMs / (1000 * 60 * 60 * 24)] : [];
+  });
+  durationsByStage.set("reviewed_purchase", purchaseHandoffDurations);
+
   const by_stage = stageOrder.map(stage => {
     const durations = durationsByStage.get(stage) ?? [];
     return {
       stage,
       avg_days: durations.length
-        ? Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 10) / 10
+        ? durations.reduce((a, b) => a + b, 0) / durations.length
         : 0,
       requisition_count: durations.length,
     };
