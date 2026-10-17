@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { requisitionsTable, holidaysTable, projectsTable, statusUpdatesTable, queriesTable } from "@workspace/db";
+import { requisitionsTable, holidaysTable, projectsTable, statusUpdatesTable, queriesTable, requisitionPartialRelationsTable } from "@workspace/db";
 import { sql, eq, isNotNull, inArray, and } from "drizzle-orm";
 import { computeCompliance, todayIST, toDateOnlyIST } from "../lib/business-days";
 
@@ -328,32 +328,59 @@ router.get("/analytics/overdue-updates", async (_req, res) => {
       site_name: requisitionsTable.site_name,
       assigned_to_name: requisitionsTable.assigned_to_name,
       assigned_at: requisitionsTable.assigned_at,
-      last_update_at: sql<Date | null>`(
-        WITH RECURSIVE ancestors(id) AS (
-          SELECT parent_requisition_id
-          FROM requisition_partial_relations
-          WHERE child_requisition_id = ${requisitionsTable.id}
-          UNION ALL
-          SELECT relation.parent_requisition_id
-          FROM requisition_partial_relations relation
-          INNER JOIN ancestors ON relation.child_requisition_id = ancestors.id
-        )
-        SELECT MAX(su.created_at)
-        FROM status_updates su
-        WHERE su.requisition_id = ${requisitionsTable.id}
-          OR su.requisition_id IN (SELECT id FROM ancestors)
-      )`,
     })
     .from(requisitionsTable)
     .where(eq(requisitionsTable.status, "in_progress"));
 
+  // Resolve inherited updates the same way as the requisition detail route:
+  // include the requisition itself and each parent in its continuation chain.
+  const relations = await db
+    .select({
+      child_id: requisitionPartialRelationsTable.child_requisition_id,
+      parent_id: requisitionPartialRelationsTable.parent_requisition_id,
+    })
+    .from(requisitionPartialRelationsTable);
+  const parentByChild = new Map(relations.map(relation => [relation.child_id, relation.parent_id]));
+  const lineageByRequisition = new Map<number, Set<number>>();
+  const lineageIds = new Set<number>();
+  for (const requisition of rows) {
+    const lineage = new Set([requisition.id]);
+    let currentId = requisition.id;
+    while (parentByChild.has(currentId)) {
+      const parentId = parentByChild.get(currentId)!;
+      if (lineage.has(parentId)) break;
+      lineage.add(parentId);
+      currentId = parentId;
+    }
+    lineageByRequisition.set(requisition.id, lineage);
+    for (const id of lineage) lineageIds.add(id);
+  }
+
+  const statusRows = lineageIds.size > 0
+    ? await db
+      .select({ requisition_id: statusUpdatesTable.requisition_id, created_at: statusUpdatesTable.created_at })
+      .from(statusUpdatesTable)
+      .where(inArray(statusUpdatesTable.requisition_id, Array.from(lineageIds)))
+    : [];
+  const latestUpdateByRequisition = new Map<number, Date>();
+  for (const update of statusRows) {
+    const existing = latestUpdateByRequisition.get(update.requisition_id);
+    if (!existing || update.created_at > existing) {
+      latestUpdateByRequisition.set(update.requisition_id, update.created_at);
+    }
+  }
+
   const withCompliance = rows
     .filter(r => r.assigned_at)
     .map(r => {
-      // Use the actual update timestamp (the same timestamp shown in the
-      // status update history), since legacy update_date values may be stale.
-      const lastActivityDate = r.last_update_at
-        ? toDateOnlyIST(r.last_update_at)
+      // Use the same created_at timestamps shown in the status update history.
+      let lastUpdateAt: Date | undefined;
+      for (const id of lineageByRequisition.get(r.id) ?? [r.id]) {
+        const candidate = latestUpdateByRequisition.get(id);
+        if (candidate && (!lastUpdateAt || candidate > lastUpdateAt)) lastUpdateAt = candidate;
+      }
+      const lastActivityDate = lastUpdateAt
+        ? toDateOnlyIST(lastUpdateAt)
         : toDateOnlyIST(r.assigned_at as Date);
       const compliance = computeCompliance(lastActivityDate, holidaySet, todayStr);
       return {
@@ -361,7 +388,7 @@ router.get("/analytics/overdue-updates", async (_req, res) => {
         ref_number: r.ref_number,
         site_name: r.site_name,
         assigned_to_name: r.assigned_to_name,
-        last_update_date: r.last_update_at ? lastActivityDate : null,
+        last_update_date: lastUpdateAt ? lastActivityDate : null,
         business_days_overdue: compliance.business_days_overdue,
         due_today: compliance.due_today,
       };
