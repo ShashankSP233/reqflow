@@ -204,7 +204,16 @@ export default function RequisitionsList() {
                     <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{req.site_name ?? "—"}</span>
                   </TableCell>
                   <TableCell><PriorityBadge priority={req.priority} /></TableCell>
-                  <TableCell><StatusBadge status={req.status} /></TableCell>
+                  <TableCell>
+                    <div className="flex flex-col items-start gap-1">
+                      <StatusBadge status={req.status} />
+                      {(req.open_query_count ?? 0) > 0 && (
+                        <Link href={`/requisitions/${req.id}`} className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 hover:bg-red-100" data-testid={`badge-open-queries-${req.id}`}>
+                          {req.open_query_count} open quer{req.open_query_count === 1 ? "y" : "ies"}
+                        </Link>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-right font-medium text-sm">{formatINR(req.total_expected_cost)}</TableCell>
                   <TableCell className="text-right text-muted-foreground text-xs">
                     <span className="flex items-center justify-end gap-1"><Calendar className="w-3 h-3" />{formatDate(req.requisition_date)}</span>

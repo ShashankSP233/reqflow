@@ -203,6 +203,17 @@ const baseSelect = {
   completed_at: requisitionsTable.completed_at,
   created_at: requisitionsTable.created_at,
   updated_at: requisitionsTable.updated_at,
+  open_query_count: sql<number>`(
+    WITH RECURSIVE ancestors(id) AS (
+      SELECT parent_requisition_id FROM requisition_partial_relations WHERE child_requisition_id = ${requisitionsTable.id}
+      UNION ALL
+      SELECT relation.parent_requisition_id FROM requisition_partial_relations relation
+      INNER JOIN ancestors ON relation.child_requisition_id = ancestors.id
+    )
+    SELECT COUNT(*)::int FROM queries q
+    WHERE q.is_resolved IS FALSE
+      AND (q.requisition_id = ${requisitionsTable.id} OR q.requisition_id IN (SELECT id FROM ancestors))
+  )`,
 };
 
 // ── List ─────────────────────────────────────────────────────────────────────

@@ -12,6 +12,7 @@ export default function Dashboard() {
   const { user } = useRole();
   const { data: summary, isLoading: sumLoading } = useGetAnalyticsSummary();
   const { data: recent, isLoading: recentLoading } = useListRequisitions();
+  const { data: openQueryRequisitions, isLoading: openQueriesLoading } = useListRequisitions({ has_queries: true });
   const { data: onHold, isLoading: onHoldLoading } = useGetOnHoldRequisitions();
 
   const statCards = [
@@ -110,6 +111,44 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       )}
+
+      <Card className="border-red-200">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <MessageSquareText className="w-4 h-4 text-red-600" />
+                Requisitions with Open Queries ({openQueryRequisitions?.length ?? 0})
+              </CardTitle>
+              <CardDescription>Requisitions with unanswered queries that need attention</CardDescription>
+            </div>
+            <Link href="/requisitions?has_queries=true" className="text-sm text-primary hover:underline" data-testid="link-view-open-queries">View all</Link>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {openQueriesLoading ? (
+            <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
+          ) : !openQueryRequisitions?.length ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">No open queries need attention.</p>
+          ) : (
+            <div className="space-y-2">
+              {openQueryRequisitions.slice(0, 8).map(r => (
+                <Link key={r.id} href={`/requisitions/${r.id}?tab=queries`}>
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-red-100 p-3 transition-colors hover:bg-red-50/50" data-testid={`card-open-query-${r.id}`}>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{r.ref_number} <span className="font-normal text-muted-foreground">· {r.raised_by_name}</span></p>
+                      <p className="truncate text-xs text-muted-foreground">{r.purpose ?? r.site_name ?? "Open query requires attention"}</p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">
+                      {r.open_query_count ?? 1} open quer{(r.open_query_count ?? 1) === 1 ? "y" : "ies"}
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {summary && (
         <div className="grid gap-4 md:grid-cols-2">

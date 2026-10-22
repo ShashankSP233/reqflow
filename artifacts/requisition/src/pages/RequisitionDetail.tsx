@@ -410,6 +410,11 @@ export default function RequisitionDetail() {
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold font-mono">{req.ref_number}</h1>
               <StatusBadge status={req.status} />
+              {(req.queries?.filter(query => !query.is_resolved).length ?? 0) > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700" data-testid="badge-open-queries">
+                  {req.queries!.filter(query => !query.is_resolved).length} open quer{req.queries!.filter(query => !query.is_resolved).length === 1 ? "y" : "ies"}
+                </span>
+              )}
               <PriorityBadge priority={req.priority} />
             </div>
             <p className="text-muted-foreground text-sm mt-1">{req.purpose ?? "No purpose stated"}</p>
@@ -969,12 +974,12 @@ export default function RequisitionDetail() {
       )}
 
       {/* Details */}
-      <Tabs defaultValue="details">
+      <Tabs defaultValue={new URLSearchParams(window.location.search).get("tab") === "queries" ? "queries" : "details"}>
         <TabsList>
           <TabsTrigger value="details">Details</TabsTrigger>
           <TabsTrigger value="items">Items ({req.items?.length ?? 0})</TabsTrigger>
           <TabsTrigger value="workflow">Workflow</TabsTrigger>
-          <TabsTrigger value="queries">Queries ({req.queries?.length ?? 0})</TabsTrigger>
+          <TabsTrigger value="queries">Queries ({req.queries?.filter(query => !query.is_resolved).length ?? 0} open)</TabsTrigger>
           <TabsTrigger value="attachments">Attachments ({req.attachments?.length ?? 0})</TabsTrigger>
           <TabsTrigger value="updates">Status Updates</TabsTrigger>
         </TabsList>

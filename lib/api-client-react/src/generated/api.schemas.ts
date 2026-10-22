@@ -98,6 +98,7 @@ export interface UserUpdateInput {
 export interface Requisition {
   id: number;
   ref_number: string;
+  open_query_count?: number;
   /** @nullable */
   project_id?: number | null;
   /** @nullable */
