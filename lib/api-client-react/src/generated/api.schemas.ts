@@ -486,7 +486,9 @@ export interface StatusCount {
 }
 
 export interface SiteStats {
-  site_name: string;
+  /** @nullable */
+  site_id?: number | null;
+  site_location: string;
   count: number;
   total_expected: number;
 }

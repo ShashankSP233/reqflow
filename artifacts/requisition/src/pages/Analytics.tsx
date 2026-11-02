@@ -120,8 +120,11 @@ export default function Analytics() {
           <CardContent>
             {bySite && (
               <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={bySite.map(s => ({ name: s.site_name.length > 15 ? s.site_name.slice(0, 15) + "…" : s.site_name, count: s.count }))}>
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                <BarChart data={bySite.map(s => ({
+                  name: `${s.site_location}${s.site_id != null && bySite.filter(other => other.site_location === s.site_location).length > 1 ? ` · #${s.site_id}` : ""}`,
+                  count: s.count,
+                }))}>
+                  <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-25} textAnchor="end" height={55} />
                   <YAxis tick={{ fontSize: 11 }} />
                   <Tooltip />
                   <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { requisitionsTable, holidaysTable, projectsTable, statusUpdatesTable, queriesTable, requisitionPartialRelationsTable } from "@workspace/db";
+import { requisitionsTable, holidaysTable, projectsTable, sitesTable, statusUpdatesTable, queriesTable, requisitionPartialRelationsTable } from "@workspace/db";
 import { sql, eq, isNotNull, inArray, and } from "drizzle-orm";
 import { computeCompliance, todayIST, toDateOnlyIST } from "../lib/business-days";
 
@@ -125,12 +125,14 @@ router.get("/analytics/by-status", async (_req, res) => {
 router.get("/analytics/by-site", async (_req, res) => {
   const rows = await db
     .select({
-      site_name: sql<string>`COALESCE(${requisitionsTable.site_name}, 'Unspecified')`,
+      site_id: requisitionsTable.site_id,
+      site_location: sql<string>`COALESCE(${sitesTable.location}, 'Unspecified')`,
       count: sql<number>`COUNT(*)::int`,
-      total_expected: sql<number>`COALESCE((SELECT SUM(CASE WHEN ri.expected_cost_is_unit IS TRUE THEN ri.quantity * ri.expected_cost ELSE ri.expected_cost END) FROM requisition_items ri WHERE ri.requisition_id = ${requisitionsTable.id}), 0)::float`,
+      total_expected: sql<number>`COALESCE(SUM((SELECT COALESCE(SUM(CASE WHEN ri.expected_cost_is_unit IS TRUE THEN ri.quantity * ri.expected_cost ELSE ri.expected_cost END), 0) FROM requisition_items ri WHERE ri.requisition_id = ${requisitionsTable.id})), 0)::float`,
     })
     .from(requisitionsTable)
-    .groupBy(requisitionsTable.site_name)
+    .leftJoin(sitesTable, eq(requisitionsTable.site_id, sitesTable.id))
+    .groupBy(requisitionsTable.site_id, sql`COALESCE(${sitesTable.location}, 'Unspecified')`)
     .orderBy(sql`COUNT(*) DESC`);
   res.json(rows);
 });
