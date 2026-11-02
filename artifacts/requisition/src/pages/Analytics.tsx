@@ -26,6 +26,17 @@ const STAGE_LABELS: Record<string, string> = {
   reviewed_chairman: "Reviewed by Chairman",
 };
 
+const STATUS_LABELS: Record<string, string> = {
+  pending_checkers: "Pending Checkers",
+  pending_approver: "Pending Approval",
+  in_progress: "In Progress",
+  on_hold: "On Hold",
+};
+
+function formatStatusLabel(status: string): string {
+  return STATUS_LABELS[status] ?? status.split("_").map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
+}
+
 function formatStageDuration(days: number): string {
   const minutes = Math.round(days * 24 * 60);
   if (minutes < 1) return "<1 min";
@@ -98,16 +109,41 @@ export default function Analytics() {
             <CardTitle className="text-sm">Requisitions by Status</CardTitle>
           </CardHeader>
           <CardContent>
-            {byStatus && (
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
-                  <Pie data={byStatus.map(s => ({ name: s.status, value: s.count }))} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
-                    {byStatus.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            )}
+            {byStatus && (() => {
+              const statusData = [...byStatus]
+                .sort((a, b) => b.count - a.count)
+                .map(s => ({ ...s, label: formatStatusLabel(s.status) }));
+              const total = statusData.reduce((sum, s) => sum + s.count, 0);
+              return (
+                <div className="grid items-center gap-2 sm:grid-cols-[200px_minmax(0,1fr)]">
+                  <div className="relative h-[210px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={statusData.map(s => ({ name: s.label, value: s.count }))} cx="50%" cy="50%" innerRadius={52} outerRadius={78} paddingAngle={2} dataKey="value" stroke="none">
+                          {statusData.map((s, i) => <Cell key={s.status} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                        </Pie>
+                        <Tooltip formatter={(value) => [value, "Requisitions"]} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-2xl font-semibold leading-none">{total}</span>
+                      <span className="mt-1 text-[11px] text-muted-foreground">total</span>
+                    </div>
+                  </div>
+                  <div className="space-y-2 py-2">
+                    {statusData.map((s, i) => (
+                      <div key={s.status} className="flex items-center justify-between gap-3 text-sm">
+                        <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
+                          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
+                          <span className="truncate">{s.label}</span>
+                        </span>
+                        <span className="shrink-0 font-medium tabular-nums">{s.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
           </CardContent>
         </Card>
 
