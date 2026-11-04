@@ -53,7 +53,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       href: "/analytics",
       label: "Analytics",
       icon: BarChart3,
-      roles: ["approver", "purchase_head"],
+      roles: ["approver", "purchase_head", "purchase_member"],
     },
     {
       href: "/setup/companies",

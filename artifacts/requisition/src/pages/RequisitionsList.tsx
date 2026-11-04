@@ -49,7 +49,9 @@ export default function RequisitionsList() {
   const { user } = useRole();
   const { toast } = useToast();
   const savedPreferences = readListPreferences(user.id);
-  const hasQueriesFromUrl = new URLSearchParams(window.location.search).get("has_queries") === "true";
+  const urlParams = new URLSearchParams(window.location.search);
+  const hasQueriesFromUrl = urlParams.get("has_queries") === "true";
+  const updatesDueFromUrl = urlParams.get("updates_due_today") === "true";
   const clearDraft = () => {
   localStorage.removeItem(DRAFT_KEY);
     toast({
@@ -57,11 +59,11 @@ export default function RequisitionsList() {
       description: "The saved requisition draft has been removed.",
     });
   };
-  const [searchInput, setSearchInput] = useState(savedPreferences.searchInput ?? "");
-  const [search, setSearch] = useState(savedPreferences.searchInput ?? "");
-  const [statusFilter, setStatusFilter] = useState(hasQueriesFromUrl || savedPreferences.hasQueriesFilter === "yes" ? "has_queries" : savedPreferences.statusFilter ?? "all");
-  const [priorityFilter, setPriorityFilter] = useState(savedPreferences.priorityFilter ?? "all");
-  const [tab, setTab] = useState(savedPreferences.tab === "action" ? "action" : "all");
+  const [searchInput, setSearchInput] = useState(updatesDueFromUrl ? "" : savedPreferences.searchInput ?? "");
+  const [search, setSearch] = useState(updatesDueFromUrl ? "" : savedPreferences.searchInput ?? "");
+  const [statusFilter, setStatusFilter] = useState(updatesDueFromUrl ? "updates_due_today" : hasQueriesFromUrl || savedPreferences.hasQueriesFilter === "yes" ? "has_queries" : savedPreferences.statusFilter ?? "all");
+  const [priorityFilter, setPriorityFilter] = useState(updatesDueFromUrl ? "all" : savedPreferences.priorityFilter ?? "all");
+  const [tab, setTab] = useState(updatesDueFromUrl ? "all" : savedPreferences.tab === "action" ? "action" : "all");
 
   useEffect(() => {
     try {
@@ -80,6 +82,7 @@ export default function RequisitionsList() {
 
   const params: Record<string, string | number | boolean | undefined> = {};
   if (statusFilter === "has_queries") params.has_queries = true;
+  else if (statusFilter === "updates_due_today") params.updates_due_today = true;
   else if (statusFilter !== "all") params.status = statusFilter;
   if (priorityFilter !== "all") params.priority = priorityFilter;
   if (user.role === "site_user") params.raised_by_id = user.id;
@@ -132,7 +135,7 @@ export default function RequisitionsList() {
       <div className="flex flex-col sm:flex-row gap-3 items-center">
         <div className="relative flex-1 w-full">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search ref no., requester, purpose, site, item, vessel/equipment..." className="pl-9 w-full" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} data-testid="input-search" />
+          <Input placeholder="Search requisitions, items, or any workflow member..." className="pl-9 w-full" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} data-testid="input-search" />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-full sm:w-[180px]" data-testid="select-status">
@@ -140,6 +143,8 @@ export default function RequisitionsList() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Statuses</SelectItem>
+            {user.role === "purchase_member" && <SelectItem value="updates_due_today">Needs Update Today</SelectItem>}
+            <SelectItem value="not_completed">Not Completed</SelectItem>
             <SelectItem value="has_queries">Has Open Queries</SelectItem>
             {STATUS_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
           </SelectContent>

@@ -1,4 +1,4 @@
-import { useGetAnalyticsSummary, useGetResolutionTimes, useGetUrgentAnalytics, useGetAnalyticsByStatus, useGetAnalyticsBySite, useGetOverdueStatusUpdates, useGetAnalyticsByProject, useGetStatusUpdateAnalytics, useGetPurchaseMemberPerformance } from "@workspace/api-client-react";
+﻿import { useGetAnalyticsSummary, useGetResolutionTimes, useGetUrgentAnalytics, useGetAnalyticsByStatus, useGetAnalyticsBySite, useGetOverdueStatusUpdates, useGetAnalyticsByProject, useGetStatusUpdateAnalytics, useGetPurchaseMemberPerformance } from "@workspace/api-client-react";
 import { formatINR, formatDate, daysBetween } from "@/lib/format";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -57,12 +57,16 @@ export default function Analytics() {
   const { data: statusUpdateStats } = useGetStatusUpdateAnalytics();
   const { data: memberPerformance } = useGetPurchaseMemberPerformance();
 
-  if (!["approver", "purchase_head"].includes(user.role)) {
+  const canViewAnalytics = ["approver", "purchase_head", "purchase_member"].includes(user.role);
+  const canViewFullAnalytics = ["approver", "purchase_head"].includes(user.role);
+  const isPurchaseMember = user.role === "purchase_member";
+
+  if (!canViewAnalytics) {
     return (
       <div className="p-6 max-w-2xl mx-auto text-center mt-16">
         <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
         <h2 className="text-xl font-bold">Access Restricted</h2>
-        <p className="text-muted-foreground mt-2">Analytics are only available to the Approver and Purchase Head.</p>
+        <p className="text-muted-foreground mt-2">Analytics are only available to the Approver, Purchase Head, and Purchase Member.</p>
       </div>
     );
   }
@@ -72,7 +76,7 @@ export default function Analytics() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Analytics</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">Procurement performance metrics — restricted access</p>
+          <p className="text-muted-foreground text-sm mt-0.5">{isPurchaseMember ? "Purchase team performance and compliance" : "Procurement performance metrics — restricted access"}</p>
         </div>
         {user.role === "purchase_head" && (
           <a href="/api/reports/requisitions.csv" download>
@@ -84,333 +88,441 @@ export default function Analytics() {
         )}
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        {[
-          { label: "Total", value: summary?.total ?? 0 },
-          { label: "Pending", value: summary?.pending ?? 0 },
-          { label: "Approved", value: summary?.approved ?? 0 },
-          { label: "Rejected", value: summary?.rejected ?? 0 },
-          { label: "Avg Days to Approve", value: `${summary?.avg_resolution_days != null ? Number(summary.avg_resolution_days).toFixed(1) : "—"}d` },
-        ].map(k => (
-          <Card key={k.label}>
-            <CardContent className="pt-4">
-              {isLoading ? <Skeleton className="h-8 w-16" /> : <p className="text-2xl font-bold">{k.value}</p>}
-              <p className="text-xs text-muted-foreground mt-1">{k.label}</p>
+      {isPurchaseMember ? (
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <ClipboardList className="w-4 h-4 text-red-500" />
+                Status Update Compliance
+              </CardTitle>
+              <CardDescription>Purchase team members behind on their daily status update (weekends &amp; holidays excluded)</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/30">
+                    <TableHead>Ref No.</TableHead>
+                    <TableHead>Site</TableHead>
+                    <TableHead>Assigned To</TableHead>
+                    <TableHead>Last Update</TableHead>
+                    <TableHead className="text-right">Business Days Overdue</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {!overdueUpdates?.length ? (
+                    <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">Everyone is up to date. 🎉</TableCell></TableRow>
+                  ) : overdueUpdates.map(r => (
+                    <TableRow key={r.id} data-testid={`row-overdue-${r.id}`}>
+                      <TableCell><Link href={`/requisitions/${r.id}`} className="font-mono text-primary hover:underline">{r.ref_number}</Link></TableCell>
+                      <TableCell className="text-muted-foreground text-xs">{r.site_name ?? "—"}</TableCell>
+                      <TableCell>{r.assigned_to_name ?? "—"}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{r.last_update_date ? formatDate(r.last_update_date) : "Never"}</TableCell>
+                      <TableCell className="text-right">
+                        <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">{r.business_days_overdue}d overdue</Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
-        ))}
-      </div>
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        {/* By Status Pie */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Requisitions by Status</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {byStatus && (() => {
-              const statusData = [...byStatus]
-                .sort((a, b) => b.count - a.count)
-                .map(s => ({ ...s, label: formatStatusLabel(s.status) }));
-              const total = statusData.reduce((sum, s) => sum + s.count, 0);
-              return (
-                <div className="grid items-center gap-2 sm:grid-cols-[200px_minmax(0,1fr)]">
-                  <div className="relative h-[210px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={statusData.map(s => ({ name: s.label, value: s.count }))} cx="50%" cy="50%" innerRadius={52} outerRadius={78} paddingAngle={2} dataKey="value" stroke="none">
-                          {statusData.map((s, i) => <Cell key={s.status} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                        </Pie>
-                        <Tooltip formatter={(value) => [value, "Requisitions"]} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-2xl font-semibold leading-none">{total}</span>
-                      <span className="mt-1 text-[11px] text-muted-foreground">total</span>
-                    </div>
-                  </div>
-                  <div className="space-y-2 py-2">
-                    {statusData.map((s, i) => (
-                      <div key={s.status} className="flex items-center justify-between gap-3 text-sm">
-                        <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
-                          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
-                          <span className="truncate">{s.label}</span>
-                        </span>
-                        <span className="shrink-0 font-medium tabular-nums">{s.count}</span>
-                      </div>
+          {memberPerformance && memberPerformance.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Users className="w-4 h-4 text-primary" />
+                  Purchase Member Performance
+                </CardTitle>
+                <CardDescription>Requisitions assigned to each member, how many they completed, and how long completion takes on average</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/30">
+                      <TableHead>Name</TableHead>
+                      <TableHead className="text-right">Assigned</TableHead>
+                      <TableHead className="text-right">Completed</TableHead>
+                      <TableHead className="text-right">Completion %</TableHead>
+                      <TableHead className="text-right">Avg Completion Time</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {memberPerformance.map((m, i) => (
+                      <TableRow key={m.assigned_to_name} data-testid={`row-member-performance-${i}`}>
+                        <TableCell className="font-medium text-sm">{m.assigned_to_name}</TableCell>
+                        <TableCell className="text-right font-medium">{m.total_assigned}</TableCell>
+                        <TableCell className="text-right">{m.total_completed}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <div className="h-1.5 w-20 rounded-full bg-muted overflow-hidden">
+                              <div className="h-full bg-emerald-500" style={{ width: `${m.completion_pct}%` }} />
+                            </div>
+                            <span className="w-12 text-right">{m.completion_pct.toFixed(0)}%</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {m.total_completed > 0 ? `${m.avg_completion_days}d` : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </div>
+                  </TableBody>
+                </Table>
+
+                <div className="border-t p-5">
+                  <h3 className="text-sm font-semibold">Share of requisitions handled</h3>
+                  <p className="text-xs text-muted-foreground mb-2">Percentage of all assigned requisitions handled by each member</p>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <PieChart>
+                      <Pie
+                        data={memberPerformance.map(m => ({ name: m.assigned_to_name, value: m.total_assigned, pct: m.share_pct }))}
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={90}
+                        dataKey="value"
+                        label={({ pct }) => `${pct}%`}
+                      >
+                        {memberPerformance.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip formatter={(value: number, name, item) => [`${value} requisitions (${item.payload.pct}%)`, name]} />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
                 </div>
-              );
-            })()}
-          </CardContent>
-        </Card>
-
-        {/* By Site Bar */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Requisitions by Site</CardTitle>
-            <CardDescription>Count of requisitions per site</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {bySite && (
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={bySite.map(s => ({
-                  name: `${s.site_location}${s.site_id != null && bySite.filter(other => other.site_location === s.site_location).length > 1 ? ` · #${s.site_id}` : ""}`,
-                  count: s.count,
-                }))}>
-                  <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-25} textAnchor="end" height={55} />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip />
-                  <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* By Project Bar */}
-      {byProject && byProject.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Requisitions by Project</CardTitle>
-            <CardDescription>Count of requisitions per project</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={byProject.map(p => ({ name: p.project_name.length > 18 ? p.project_name.slice(0, 18) + "…" : p.project_name, count: p.count }))}>
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Urgent Requisitions */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-red-500" />
-            Urgent Requisitions
-          </CardTitle>
-          <CardDescription>All urgent priority requisitions — who handled them and how fast</CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead>Ref No.</TableHead>
-                <TableHead>Raised By</TableHead>
-                <TableHead>Site</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead>Assigned To</TableHead>
-                <TableHead className="text-right">Days to Approve</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {!urgentList?.length ? (
-                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No urgent requisitions.</TableCell></TableRow>
-              ) : urgentList.map(r => (
-                <TableRow key={r.id} data-testid={`row-urgent-${r.id}`}>
-                  <TableCell><Link href={`/requisitions/${r.id}`} className="font-mono text-primary hover:underline">{r.ref_number}</Link></TableCell>
-                  <TableCell>{r.raised_by_name}</TableCell>
-                  <TableCell className="text-muted-foreground text-xs">{r.site_name ?? "—"}</TableCell>
-                  <TableCell><StatusBadge status={r.status} /></TableCell>
-                  <TableCell className="text-sm">{formatDate(r.created_at)}</TableCell>
-                  <TableCell>{r.assigned_to_name ?? "—"}</TableCell>
-                  <TableCell className="text-right font-medium">
-                    {r.resolution_days != null ? (
-                      <span className={Number(r.resolution_days) > 3 ? "text-red-600" : "text-emerald-600"}>{Number(r.resolution_days).toFixed(1)}d</span>
-                    ) : <span className="text-muted-foreground">—</span>}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {/* Status Update Compliance */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm flex items-center gap-2">
-            <ClipboardList className="w-4 h-4 text-red-500" />
-            Status Update Compliance
-          </CardTitle>
-          <CardDescription>Purchase team members behind on their daily status update (weekends &amp; holidays excluded)</CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead>Ref No.</TableHead>
-                <TableHead>Site</TableHead>
-                <TableHead>Assigned To</TableHead>
-                <TableHead>Last Update</TableHead>
-                <TableHead className="text-right">Business Days Overdue</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {!overdueUpdates?.length ? (
-                <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">Everyone is up to date. 🎉</TableCell></TableRow>
-              ) : overdueUpdates.map(r => (
-                <TableRow key={r.id} data-testid={`row-overdue-${r.id}`}>
-                  <TableCell><Link href={`/requisitions/${r.id}`} className="font-mono text-primary hover:underline">{r.ref_number}</Link></TableCell>
-                  <TableCell className="text-muted-foreground text-xs">{r.site_name ?? "—"}</TableCell>
-                  <TableCell>{r.assigned_to_name ?? "—"}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{r.last_update_date ? formatDate(r.last_update_date) : "Never"}</TableCell>
-                  <TableCell className="text-right">
-                    <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">{r.business_days_overdue}d overdue</Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {/* Status Update Stage Timing (point 15) */}
-      {statusUpdateStats && statusUpdateStats.by_stage?.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm flex items-center gap-2">
-              <ClipboardList className="w-4 h-4 text-primary" />
-              Average Time Between Workflow Stages
-            </CardTitle>
-            <CardDescription>Checked by Purchase measures approval to Purchase Head assignment. Other stages measure time from the previous stage; Prepared starts at assignment.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={320}>
-              <BarChart data={statusUpdateStats.by_stage.map(s => ({ name: STAGE_LABELS[s.stage] ?? s.stage, days: s.avg_days, durationLabel: s.requisition_count ? formatStageDuration(s.avg_days) : "No data", n: s.requisition_count }))} layout="vertical" margin={{ left: 20, right: 70 }}>
-                <XAxis type="number" tick={{ fontSize: 11 }} label={{ value: "Average duration (days)", position: "insideBottom", offset: -5, fontSize: 11 }} />
-                <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={190} />
-                <Tooltip formatter={(value: number, _name, item) => item.payload.n === 0
-                  ? ["No valid timing data", "Timing unavailable"]
-                  : [`${formatStageDuration(value)} (${item.payload.n} requisition${item.payload.n > 1 ? "s" : ""})`, "Average duration"]} />
-                <Bar dataKey="days" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]}>
-                  <LabelList dataKey="durationLabel" position="right" fontSize={10} />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Purchase Member Performance */}
-      {memberPerformance && memberPerformance.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Users className="w-4 h-4 text-primary" />
-              Purchase Member Performance
-            </CardTitle>
-            <CardDescription>Requisitions assigned to each member, how many they completed, and how long completion takes on average</CardDescription>
-          </CardHeader>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/30">
-                  <TableHead>Name</TableHead>
-                  <TableHead className="text-right">Assigned</TableHead>
-                  <TableHead className="text-right">Completed</TableHead>
-                  <TableHead className="text-right">Completion %</TableHead>
-                  <TableHead className="text-right">Avg Completion Time</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {memberPerformance.map((m, i) => (
-                  <TableRow key={m.assigned_to_name} data-testid={`row-member-performance-${i}`}>
-                    <TableCell className="font-medium text-sm">{m.assigned_to_name}</TableCell>
-                    <TableCell className="text-right font-medium">{m.total_assigned}</TableCell>
-                    <TableCell className="text-right">{m.total_completed}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <div className="h-1.5 w-20 rounded-full bg-muted overflow-hidden">
-                          <div className="h-full bg-emerald-500" style={{ width: `${m.completion_pct}%` }} />
-                        </div>
-                        <span className="w-12 text-right">{m.completion_pct.toFixed(0)}%</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {m.total_completed > 0 ? `${m.avg_completion_days}d` : <span className="text-muted-foreground">—</span>}
-                    </TableCell>
-                  </TableRow>
+              </CardContent>
+            </Card>
+          )}
+        </>
+      ) : (
+        <>
+          {canViewFullAnalytics && (
+            <>
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                {[
+                  { label: "Total", value: summary?.total ?? 0 },
+                  { label: "Pending", value: summary?.pending ?? 0 },
+                  { label: "Approved", value: summary?.approved ?? 0 },
+                  { label: "Rejected", value: summary?.rejected ?? 0 },
+                  { label: "Avg Days to Approve", value: `${summary?.avg_resolution_days != null ? Number(summary.avg_resolution_days).toFixed(1) : "—"}d` },
+                ].map(k => (
+                  <Card key={k.label}>
+                    <CardContent className="pt-4">
+                      {isLoading ? <Skeleton className="h-8 w-16" /> : <p className="text-2xl font-bold">{k.value}</p>}
+                      <p className="text-xs text-muted-foreground mt-1">{k.label}</p>
+                    </CardContent>
+                  </Card>
                 ))}
-              </TableBody>
-            </Table>
+              </div>
 
-            {/* Share of requisitions handled */}
-            <div className="border-t p-5">
-              <h3 className="text-sm font-semibold">Share of requisitions handled</h3>
-              <p className="text-xs text-muted-foreground mb-2">Percentage of all assigned requisitions handled by each member</p>
-              <ResponsiveContainer width="100%" height={280}>
-                <PieChart>
-                  <Pie
-                    data={memberPerformance.map(m => ({ name: m.assigned_to_name, value: m.total_assigned, pct: m.share_pct }))}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={90}
-                    dataKey="value"
-                    label={({ pct }) => `${pct}%`}
-                  >
-                    {memberPerformance.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip formatter={(value: number, name, item) => [`${value} requisitions (${item.payload.pct}%)`, name]} />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
+              <div className="grid gap-5 lg:grid-cols-2">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Requisitions by Status</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {byStatus && (() => {
+                      const statusData = [...byStatus]
+                        .sort((a, b) => b.count - a.count)
+                        .map(s => ({ ...s, label: formatStatusLabel(s.status) }));
+                      const total = statusData.reduce((sum, s) => sum + s.count, 0);
+                      return (
+                        <div className="grid items-center gap-2 sm:grid-cols-[200px_minmax(0,1fr)]">
+                          <div className="relative h-[210px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <PieChart>
+                                <Pie data={statusData.map(s => ({ name: s.label, value: s.count }))} cx="50%" cy="50%" innerRadius={52} outerRadius={78} paddingAngle={2} dataKey="value" stroke="none">
+                                  {statusData.map((s, i) => <Cell key={s.status} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                                </Pie>
+                                <Tooltip formatter={(value) => [value, "Requisitions"]} />
+                              </PieChart>
+                            </ResponsiveContainer>
+                            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                              <span className="text-2xl font-semibold leading-none">{total}</span>
+                              <span className="mt-1 text-[11px] text-muted-foreground">total</span>
+                            </div>
+                          </div>
+                          <div className="space-y-2 py-2">
+                            {statusData.map((s, i) => (
+                              <div key={s.status} className="flex items-center justify-between gap-3 text-sm">
+                                <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
+                                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
+                                  <span className="truncate">{s.label}</span>
+                                </span>
+                                <span className="shrink-0 font-medium tabular-nums">{s.count}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Requisitions by Site</CardTitle>
+                    <CardDescription>Count of requisitions per site</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {bySite && (
+                      <ResponsiveContainer width="100%" height={220}>
+                        <BarChart data={bySite.map(s => ({
+                          name: `${s.site_location}${s.site_id != null && bySite.filter(other => other.site_location === s.site_location).length > 1 ? ` · #${s.site_id}` : ""}`,
+                          count: s.count,
+                        }))}>
+                          <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-25} textAnchor="end" height={55} />
+                          <YAxis tick={{ fontSize: 11 }} />
+                          <Tooltip />
+                          <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </>
+          )}
+
+          {canViewFullAnalytics && byProject && byProject.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Requisitions by Project</CardTitle>
+                <CardDescription>Count of requisitions per project</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={byProject.map(p => ({ name: p.project_name.length > 18 ? p.project_name.slice(0, 18) + "…" : p.project_name, count: p.count }))}>
+                    <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip />
+                    <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {canViewFullAnalytics && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-red-500" />
+                  Urgent Requisitions
+                </CardTitle>
+                <CardDescription>All urgent priority requisitions — who handled them and how fast</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/30">
+                      <TableHead>Ref No.</TableHead>
+                      <TableHead>Raised By</TableHead>
+                      <TableHead>Site</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead>Assigned To</TableHead>
+                      <TableHead className="text-right">Days to Approve</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {!urgentList?.length ? (
+                      <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No urgent requisitions.</TableCell></TableRow>
+                    ) : urgentList.map(r => (
+                      <TableRow key={r.id} data-testid={`row-urgent-${r.id}`}>
+                        <TableCell><Link href={`/requisitions/${r.id}`} className="font-mono text-primary hover:underline">{r.ref_number}</Link></TableCell>
+                        <TableCell>{r.raised_by_name}</TableCell>
+                        <TableCell className="text-muted-foreground text-xs">{r.site_name ?? "—"}</TableCell>
+                        <TableCell><StatusBadge status={r.status} /></TableCell>
+                        <TableCell className="text-sm">{formatDate(r.created_at)}</TableCell>
+                        <TableCell>{r.assigned_to_name ?? "—"}</TableCell>
+                        <TableCell className="text-right font-medium">
+                          {r.resolution_days != null ? (
+                            <span className={Number(r.resolution_days) > 3 ? "text-red-600" : "text-emerald-600"}>{Number(r.resolution_days).toFixed(1)}d</span>
+                          ) : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <ClipboardList className="w-4 h-4 text-red-500" />
+                Status Update Compliance
+              </CardTitle>
+              <CardDescription>Purchase team members behind on their daily status update (weekends &amp; holidays excluded)</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/30">
+                    <TableHead>Ref No.</TableHead>
+                    <TableHead>Site</TableHead>
+                    <TableHead>Assigned To</TableHead>
+                    <TableHead>Last Update</TableHead>
+                    <TableHead className="text-right">Business Days Overdue</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {!overdueUpdates?.length ? (
+                    <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">Everyone is up to date. 🎉</TableCell></TableRow>
+                  ) : overdueUpdates.map(r => (
+                    <TableRow key={r.id} data-testid={`row-overdue-${r.id}`}>
+                      <TableCell><Link href={`/requisitions/${r.id}`} className="font-mono text-primary hover:underline">{r.ref_number}</Link></TableCell>
+                      <TableCell className="text-muted-foreground text-xs">{r.site_name ?? "—"}</TableCell>
+                      <TableCell>{r.assigned_to_name ?? "—"}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{r.last_update_date ? formatDate(r.last_update_date) : "Never"}</TableCell>
+                      <TableCell className="text-right">
+                        <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">{r.business_days_overdue}d overdue</Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          {canViewFullAnalytics && statusUpdateStats && statusUpdateStats.by_stage?.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <ClipboardList className="w-4 h-4 text-primary" />
+                  Average Time Between Workflow Stages
+                </CardTitle>
+                <CardDescription>Checked by Purchase measures approval to Purchase Head assignment. Other stages measure time from the previous stage; Prepared starts at assignment.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={320}>
+                  <BarChart data={statusUpdateStats.by_stage.map(s => ({ name: STAGE_LABELS[s.stage] ?? s.stage, days: s.avg_days, durationLabel: s.requisition_count ? formatStageDuration(s.avg_days) : "No data", n: s.requisition_count }))} layout="vertical" margin={{ left: 20, right: 70 }}>
+                    <XAxis type="number" tick={{ fontSize: 11 }} label={{ value: "Average duration (days)", position: "insideBottom", offset: -5, fontSize: 11 }} />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={190} />
+                    <Tooltip formatter={(value: number, _name, item) => item.payload.n === 0
+                      ? ["No valid timing data", "Timing unavailable"]
+                      : [`${formatStageDuration(value)} (${item.payload.n} requisition${item.payload.n > 1 ? "s" : ""})`, "Average duration"]} />
+                    <Bar dataKey="days" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]}>
+                      <LabelList dataKey="durationLabel" position="right" fontSize={10} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {memberPerformance && memberPerformance.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Users className="w-4 h-4 text-primary" />
+                  Purchase Member Performance
+                </CardTitle>
+                <CardDescription>Requisitions assigned to each member, how many they completed, and how long completion takes on average</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/30">
+                      <TableHead>Name</TableHead>
+                      <TableHead className="text-right">Assigned</TableHead>
+                      <TableHead className="text-right">Completed</TableHead>
+                      <TableHead className="text-right">Completion %</TableHead>
+                      <TableHead className="text-right">Avg Completion Time</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {memberPerformance.map((m, i) => (
+                      <TableRow key={m.assigned_to_name} data-testid={`row-member-performance-${i}`}>
+                        <TableCell className="font-medium text-sm">{m.assigned_to_name}</TableCell>
+                        <TableCell className="text-right font-medium">{m.total_assigned}</TableCell>
+                        <TableCell className="text-right">{m.total_completed}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <div className="h-1.5 w-20 rounded-full bg-muted overflow-hidden">
+                              <div className="h-full bg-emerald-500" style={{ width: `${m.completion_pct}%` }} />
+                            </div>
+                            <span className="w-12 text-right">{m.completion_pct.toFixed(0)}%</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {m.total_completed > 0 ? `${m.avg_completion_days}d` : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+
+                <div className="border-t p-5">
+                  <h3 className="text-sm font-semibold">Share of requisitions handled</h3>
+                  <p className="text-xs text-muted-foreground mb-2">Percentage of all assigned requisitions handled by each member</p>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <PieChart>
+                      <Pie
+                        data={memberPerformance.map(m => ({ name: m.assigned_to_name, value: m.total_assigned, pct: m.share_pct }))}
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={90}
+                        dataKey="value"
+                        label={({ pct }) => `${pct}%`}
+                      >
+                        {memberPerformance.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip formatter={(value: number, name, item) => [`${value} requisitions (${item.payload.pct}%)`, name]} />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {user.role !== "purchase_member" && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Resolution Time per Requisition</CardTitle>
+                <CardDescription>Time from creation to approval (most recent 50)</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/30">
+                      <TableHead>Ref No.</TableHead>
+                      <TableHead>Raised By</TableHead>
+                      <TableHead>Priority</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead>Approved</TableHead>
+                      <TableHead className="text-right">Days</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {!resTimes?.length ? (
+                      <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-6">No data.</TableCell></TableRow>
+                    ) : resTimes.map(r => (
+                      <TableRow key={r.id} data-testid={`row-resolution-${r.id}`}>
+                        <TableCell><Link href={`/requisitions/${r.id}`} className="font-mono text-primary hover:underline text-xs">{r.ref_number}</Link></TableCell>
+                        <TableCell className="text-sm">{r.raised_by_name}</TableCell>
+                        <TableCell><PriorityBadge priority={r.priority} /></TableCell>
+                        <TableCell><StatusBadge status={r.status} /></TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{formatDate(r.created_at)}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{r.approved_at ? formatDate(r.approved_at) : "—"}</TableCell>
+                        <TableCell className="text-right">
+                          {r.resolution_days != null ? (
+                            <span className={`font-medium ${Number(r.resolution_days) > 7 ? "text-red-600" : Number(r.resolution_days) > 3 ? "text-amber-600" : "text-emerald-600"}`}>{Number(r.resolution_days).toFixed(1)}</span>
+                          ) : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+        </>
       )}
-
-      {/* Resolution Times Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">Resolution Time per Requisition</CardTitle>
-          <CardDescription>Time from creation to approval (most recent 50)</CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead>Ref No.</TableHead>
-                <TableHead>Raised By</TableHead>
-                <TableHead>Priority</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead>Approved</TableHead>
-                <TableHead className="text-right">Days</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {!resTimes?.length ? (
-                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-6">No data.</TableCell></TableRow>
-              ) : resTimes.map(r => (
-                <TableRow key={r.id} data-testid={`row-resolution-${r.id}`}>
-                  <TableCell><Link href={`/requisitions/${r.id}`} className="font-mono text-primary hover:underline text-xs">{r.ref_number}</Link></TableCell>
-                  <TableCell className="text-sm">{r.raised_by_name}</TableCell>
-                  <TableCell><PriorityBadge priority={r.priority} /></TableCell>
-                  <TableCell><StatusBadge status={r.status} /></TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{formatDate(r.created_at)}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{r.approved_at ? formatDate(r.approved_at) : "—"}</TableCell>
-                  <TableCell className="text-right">
-                    {r.resolution_days != null ? (
-                      <span className={`font-medium ${Number(r.resolution_days) > 7 ? "text-red-600" : Number(r.resolution_days) > 3 ? "text-amber-600" : "text-emerald-600"}`}>{Number(r.resolution_days).toFixed(1)}</span>
-                    ) : <span className="text-muted-foreground">—</span>}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
     </div>
   );
 }

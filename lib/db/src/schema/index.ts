@@ -12,3 +12,4 @@ export * from "./queries";
 export * from "./status_updates";
 export * from "./holidays";
 export * from "./approval_notes";
+export * from "./local_purchase_tag_events";

@@ -4,9 +4,17 @@ import { Link } from "wouter";
 import { StatusBadge } from "@/components/requisition/StatusBadge";
 import { PriorityBadge } from "@/components/requisition/PriorityBadge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Clock, FileText, CheckCircle2, AlertTriangle, Hourglass, PlusCircle, PauseCircle, MessageSquareText } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Clock, FileText, CheckCircle2, AlertTriangle, Hourglass, PlusCircle, PauseCircle, MessageSquareText, ClipboardCheck } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRole } from "@/context/RoleContext";
+
+interface DailyUpdateScore {
+  active_requisitions: number;
+  updated_today: number;
+  remaining: number;
+  updates_required_today: boolean;
+}
 
 export default function Dashboard() {
   const { user } = useRole();
@@ -14,8 +22,23 @@ export default function Dashboard() {
   const { data: recent, isLoading: recentLoading } = useListRequisitions();
   const { data: openQueryRequisitions, isLoading: openQueriesLoading } = useListRequisitions({ has_queries: true });
   const { data: onHold, isLoading: onHoldLoading } = useGetOnHoldRequisitions();
+  const isPurchaseMember = user.role === "purchase_member";
+  const {
+    data: dailyUpdateScore,
+    isLoading: dailyUpdateScoreLoading,
+    isError: dailyUpdateScoreError,
+  } = useQuery<DailyUpdateScore>({
+    queryKey: ["/api/analytics/purchase-member-daily-updates", user.id],
+    enabled: isPurchaseMember,
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      const response = await fetch("/api/analytics/purchase-member-daily-updates");
+      if (!response.ok) throw new Error("Could not load today's update count.");
+      return response.json() as Promise<DailyUpdateScore>;
+    },
+  });
 
-  const statCards = [
+  const standardCards = [
     {
       label: "Total Requisitions",
       value: summary?.total ?? 0,
@@ -52,6 +75,30 @@ export default function Dashboard() {
       iconClass: "text-orange-600",
     },
   ];
+  const updateSub = dailyUpdateScoreError
+    ? "Could not load today's update count"
+    : dailyUpdateScoreLoading
+      ? "Loading today's update count"
+      : dailyUpdateScore?.active_requisitions === 0
+      ? "No active requisitions assigned"
+      : dailyUpdateScore?.updates_required_today
+        ? `${dailyUpdateScore?.updated_today ?? 0} of ${dailyUpdateScore?.active_requisitions ?? 0} active requisitions updated`
+        : "No updates due today";
+  const statCards = isPurchaseMember
+    ? [
+        standardCards[0],
+        {
+          label: "Status Updates Today",
+          value: dailyUpdateScoreError ? "—" : dailyUpdateScore?.remaining ?? 0,
+          sub: updateSub,
+          icon: ClipboardCheck,
+          iconClass: dailyUpdateScore?.remaining ? "text-amber-600" : "text-emerald-600",
+          loading: dailyUpdateScoreLoading,
+        },
+        standardCards[3],
+        standardCards[4],
+      ]
+    : standardCards;
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -68,21 +115,27 @@ export default function Dashboard() {
         )}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-        {statCards.map((s) => (
-          <Card key={s.label}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium text-muted-foreground">{s.label}</CardTitle>
-              <s.icon className={`h-4 w-4 ${s.iconClass}`} />
-            </CardHeader>
-            <CardContent>
-              {sumLoading ? <Skeleton className="h-8 w-16" /> : (
-                <div className="text-3xl font-bold" data-testid={`stat-${s.label.toLowerCase().replace(/\s/g, "-")}`}>{s.value}</div>
-              )}
-              <p className="text-xs text-muted-foreground mt-1">{s.sub}</p>
-            </CardContent>
-          </Card>
-        ))}
+      <div className={`grid gap-4 md:grid-cols-2 ${isPurchaseMember ? "lg:grid-cols-4" : "lg:grid-cols-5"}`}>
+        {statCards.map((s) => {
+          const cardLoading = s.label === "Status Updates Today" ? dailyUpdateScoreLoading : sumLoading;
+          const card = (
+            <Card key={s.label} className={s.label === "Status Updates Today" ? "h-full cursor-pointer transition-colors hover:border-primary/50 hover:bg-accent/30" : undefined}>
+              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardTitle className="text-sm font-medium text-muted-foreground">{s.label}</CardTitle>
+                <s.icon className={`h-4 w-4 ${s.iconClass}`} />
+              </CardHeader>
+              <CardContent>
+                {cardLoading ? <Skeleton className="h-8 w-16" /> : (
+                  <div className="text-3xl font-bold" data-testid={`stat-${s.label.toLowerCase().replace(/\s/g, "-")}`}>{s.value}</div>
+                )}
+                <p className="text-xs text-muted-foreground mt-1">{s.sub}</p>
+              </CardContent>
+            </Card>
+          );
+          return s.label === "Status Updates Today"
+            ? <Link key={s.label} href="/requisitions?updates_due_today=true" className="block h-full rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="View requisitions needing today's status update">{card}</Link>
+            : card;
+        })}
       </div>
 
       {onHold && onHold.length > 0 && (

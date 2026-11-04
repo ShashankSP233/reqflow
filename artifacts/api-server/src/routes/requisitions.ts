@@ -12,10 +12,10 @@ import {
   requisitionsTable, requisitionItemsTable,
   projectsTable, sitesTable, attachmentsTable, queriesTable, queryRepliesTable, statusUpdatesTable,
   approvalNotesTable, requisitionPartialRelationsTable, requisitionPartialRelationItemsTable, usersTable,
-  holidaysTable, userProjectsTable
+  holidaysTable, userProjectsTable, localPurchaseTagEventsTable
 } from "@workspace/db";
-import { eq, and, sql, inArray, or, notInArray, isNull } from "drizzle-orm";
-import { computeCompliance, toDateOnlyIST, todayIST } from "../lib/business-days";
+import { eq, ne, and, sql, inArray, or, notInArray, isNull, desc } from "drizzle-orm";
+import { computeCompliance, isBusinessDay, toDateOnlyIST, todayIST } from "../lib/business-days";
 import type { SessionUser } from "../lib/session-types";
 
 const router = Router();
@@ -161,6 +161,16 @@ async function getActiveItems(id: number) {
     .orderBy(requisitionItemsTable.sort_order);
 }
 
+async function getLocalPurchaseTagState(requisitionId: number) {
+  const [latestEvent] = await db
+    .select({ action: localPurchaseTagEventsTable.action })
+    .from(localPurchaseTagEventsTable)
+    .where(eq(localPurchaseTagEventsTable.requisition_id, requisitionId))
+    .orderBy(desc(localPurchaseTagEventsTable.id))
+    .limit(1);
+  return latestEvent?.action === "tagged";
+}
+
 const baseSelect = {
   id: requisitionsTable.id,
   ref_number: requisitionsTable.ref_number,
@@ -218,9 +228,10 @@ const baseSelect = {
 
 // ── List ─────────────────────────────────────────────────────────────────────
 router.get("/requisitions", async (req, res) => {
-  const { status, priority, raised_by_id, assigned_to_id, checker1_id, checker2_id, approver_id, checker_id, project_id, search, needs_action, has_queries } = req.query;
+  const { status, priority, raised_by_id, assigned_to_id, checker1_id, checker2_id, approver_id, checker_id, project_id, search, needs_action, has_queries, updates_due_today } = req.query;
   const conditions = [];
-  if (status) conditions.push(eq(requisitionsTable.status, String(status)));
+  if (status === "not_completed") conditions.push(ne(requisitionsTable.status, "completed"));
+  else if (status) conditions.push(eq(requisitionsTable.status, String(status)));
   if (priority) conditions.push(eq(requisitionsTable.priority, String(priority)));
   if (raised_by_id) conditions.push(eq(requisitionsTable.raised_by_id, Number(raised_by_id)));
   if (assigned_to_id) conditions.push(eq(requisitionsTable.assigned_to_id, Number(assigned_to_id)));
@@ -240,6 +251,37 @@ router.get("/requisitions", async (req, res) => {
       WHERE q.is_resolved IS FALSE
         AND (q.requisition_id = ${requisitionsTable.id} OR q.requisition_id IN (SELECT id FROM ancestors))
     )`);
+  }
+  if (updates_due_today === "true") {
+    if (req.currentUser?.role !== "purchase_member") {
+      conditions.push(sql`FALSE`);
+    } else {
+      const todayStr = todayIST();
+      const holidayRows = await db.select({ date: holidaysTable.date }).from(holidaysTable);
+      const holidaySet = new Set(holidayRows.map((holiday) => holiday.date));
+      if (!isBusinessDay(todayStr, holidaySet)) {
+        conditions.push(sql`FALSE`);
+      } else {
+        conditions.push(and(
+          eq(requisitionsTable.assigned_to_id, req.currentUser.id),
+          eq(requisitionsTable.status, "in_progress"),
+          sql`NOT EXISTS (
+            WITH RECURSIVE ancestors(id) AS (
+              SELECT parent_requisition_id FROM requisition_partial_relations
+              WHERE child_requisition_id = ${requisitionsTable.id}
+              UNION
+              SELECT relation.parent_requisition_id
+              FROM requisition_partial_relations relation
+              INNER JOIN ancestors ON relation.child_requisition_id = ancestors.id
+            )
+            SELECT 1 FROM status_updates update_row
+            WHERE update_row.update_date = ${todayStr}
+              AND (update_row.requisition_id = ${requisitionsTable.id}
+                OR update_row.requisition_id IN (SELECT id FROM ancestors))
+          )`,
+        ));
+      }
+    }
   }
   // A checker can be checker1 on one requisition and checker2 on another —
   // this matches either role for the same person in a single query.
@@ -272,14 +314,19 @@ router.get("/requisitions", async (req, res) => {
       conditions.push(sql`FALSE`);
     }
   }
-  // One unified search across everything a person might remember about a
-  // past requisition — ref number, requester, purpose, site, or what was
-  // actually requested (item name / vessel-equipment-location).
+  // One unified search across requisition details, requested items, and every
+  // person recorded in its workflow (requester, reviewers, purchase head,
+  // approver, and assigned purchase member).
   if (search) {
     const term = `%${String(search).trim().toLowerCase()}%`;
     conditions.push(or(
       sql`LOWER(${requisitionsTable.ref_number}) LIKE ${term}`,
       sql`LOWER(${requisitionsTable.raised_by_name}) LIKE ${term}`,
+      sql`LOWER(COALESCE(${requisitionsTable.checker1_name}, '')) LIKE ${term}`,
+      sql`LOWER(COALESCE(${requisitionsTable.checker2_name}, '')) LIKE ${term}`,
+      sql`LOWER(COALESCE(${requisitionsTable.approver_name}, '')) LIKE ${term}`,
+      sql`LOWER(COALESCE(${requisitionsTable.purchase_head_name}, '')) LIKE ${term}`,
+      sql`LOWER(COALESCE(${requisitionsTable.assigned_to_name}, '')) LIKE ${term}`,
       sql`LOWER(COALESCE(${requisitionsTable.purpose}, '')) LIKE ${term}`,
       sql`LOWER(COALESCE(${requisitionsTable.site_name}, '')) LIKE ${term}`,
       sql`EXISTS (
@@ -418,6 +465,7 @@ router.get("/requisitions/:id", async (req, res) => {
   const replies = queryIds.length > 0 ? await db.select().from(queryRepliesTable).where(inArray(queryRepliesTable.query_id, queryIds)) : [];
   const replyAttachments = replies.length > 0 ? await db.select().from(attachmentsTable).where(and(eq(attachmentsTable.context, "query_reply"), inArray(attachmentsTable.context_id, replies.map(r => r.id)))) : [];
   const statusUpdates = await db.select().from(statusUpdatesTable).where(inArray(statusUpdatesTable.requisition_id, lineageIds)).orderBy(statusUpdatesTable.created_at);
+  const localPurchaseTagged = await getLocalPurchaseTagState(id);
   const relation = await db
     .select({
       parent_id: requisitionPartialRelationsTable.parent_requisition_id,
@@ -487,8 +535,46 @@ router.get("/requisitions/:id", async (req, res) => {
     parent: relation.find(r => r.child_id === id) ? refsById.get(relation.find(r => r.child_id === id)!.parent_id) ?? null : null,
     parent_requisition_id: relation.find(r => r.child_id === id)?.parent_id ?? null,
     is_continuation: lineageIds.length > 1,
+    local_purchase_tagged: localPurchaseTagged,
     compliance,
   });
+});
+
+// Purchase heads can tag or untag requisitions at any stage, including after
+// completion. Each change is appended to the separate audit table.
+router.put("/requisitions/:id/local-purchase-tag", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid requisition ID." });
+    return;
+  }
+  if (req.currentUser?.role !== "purchase_head") {
+    res.status(403).json({ error: "Only the purchase head can change the local purchase tag." });
+    return;
+  }
+
+  const tagged = req.body?.tagged;
+  if (typeof tagged !== "boolean") {
+    res.status(400).json({ error: "tagged must be true or false." });
+    return;
+  }
+
+  const [existing] = await db.select({ id: requisitionsTable.id }).from(requisitionsTable).where(eq(requisitionsTable.id, id));
+  if (!existing) {
+    res.status(404).json({ error: "Requisition not found." });
+    return;
+  }
+
+  const currentState = await getLocalPurchaseTagState(id);
+  if (currentState !== tagged) {
+    await db.insert(localPurchaseTagEventsTable).values({
+      requisition_id: id,
+      action: tagged ? "tagged" : "untagged",
+      changed_by_id: req.currentUser.id,
+      changed_by_name: req.currentUser.name,
+    });
+  }
+  res.json({ requisition_id: id, tagged });
 });
 
 // ── Approver Priority Update ─────────────────────────────────────────────────

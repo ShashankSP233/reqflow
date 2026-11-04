@@ -37,7 +37,7 @@ The application is a full-stack TypeScript system with a React frontend, Express
 
 ---
 
-# Overview
+## Overview
 
 ReqFlow manages requisitions through a controlled workflow involving:
 
@@ -61,7 +61,7 @@ The system also supports **Partial Close**, allowing fulfilled items to be compl
 
 ---
 
-# Features
+## Features
 
 ReqFlow currently supports:
 
@@ -92,10 +92,10 @@ ReqFlow currently supports:
 
 ---
 
-# Technology Stack
+## Technology Stack
 
 | Component | Technology |
-|---|---|
+| --- | --- |
 | Frontend | React |
 | Language | TypeScript |
 | Build Tool | Vite |
@@ -117,7 +117,7 @@ The database package is:
 
 ---
 
-# Project Structure
+## Project Structure
 
 The repository is organized into applications and shared libraries.
 
@@ -163,13 +163,13 @@ reqflow/
 
 ---
 
-# User Roles
+## User Roles
 
 ReqFlow currently has five roles.
 
 Do not introduce additional roles without an explicit product requirement.
 
-## 1. Site User
+### 1. Site User
 
 Role:
 
@@ -187,7 +187,7 @@ Responsibilities include:
 
 ---
 
-## 2. Checker
+### 2. Checker
 
 Role:
 
@@ -201,7 +201,7 @@ Checkers can review requisitions and perform the workflow actions available to t
 
 ---
 
-## 3. Approver
+### 3. Approver
 
 Role:
 
@@ -215,7 +215,7 @@ Approvers review requisitions and perform the approval actions available to them
 
 ---
 
-## 4. Purchase Member
+### 4. Purchase Member
 
 Role:
 
@@ -242,7 +242,7 @@ Other users who have access to the requisition can view the status-update histor
 
 ---
 
-## 5. Purchase Head
+### 5. Purchase Head
 
 Role:
 
@@ -266,7 +266,7 @@ Authorization must be enforced by the backend, not only by the frontend.
 
 ---
 
-# Requisition Workflow
+## Requisition Workflow
 
 The currently supported requisition statuses are:
 
@@ -283,7 +283,7 @@ completed
 
 Do not invent new statuses unless a new business requirement explicitly requires them.
 
-## General Workflow
+### General Workflow
 
 A normal requisition can progress approximately as follows:
 
@@ -309,7 +309,7 @@ The backend workflow implementation is the source of truth for valid transitions
 
 ---
 
-# Requisition Data
+## Requisition Data
 
 A requisition can contain information such as:
 
@@ -333,11 +333,11 @@ A requisition can contain information such as:
 
 ---
 
-# Requisition IDs vs Reference Numbers
+## Requisition IDs vs Reference Numbers
 
 ReqFlow uses two different identifiers.
 
-## Database ID
+### Database ID
 
 The requisition has a numeric database ID.
 
@@ -355,7 +355,7 @@ Example:
 /requisitions/11
 ```
 
-## Requisition Reference
+### Requisition Reference
 
 The user-facing reference is a human-readable identifier.
 
@@ -369,13 +369,13 @@ The reference should be displayed to users.
 
 However, when constructing frontend URLs, use the numeric requisition ID.
 
-### Correct
+#### Correct
 
 ```text
 /requisitions/11
 ```
 
-### Incorrect
+#### Incorrect
 
 ```text
 /requisitions/REQ-20260912-0046
@@ -385,7 +385,7 @@ This distinction is particularly important for continuation requisitions.
 
 ---
 
-# Expected Cost per Unit
+## Expected Cost per Unit
 
 For new requisition items, the expected cost represents the expected cost of **one unit**.
 
@@ -401,7 +401,7 @@ Helper text:
 Enter the expected cost of one unit. Total is calculated automatically.
 ```
 
-## Calculation
+### Calculation
 
 For each item:
 
@@ -415,7 +415,7 @@ The requisition total is:
 Requisition Total = Sum of all Line Totals
 ```
 
-### Example
+#### Example
 
 If:
 
@@ -433,7 +433,7 @@ Line Total = 3 × 71,820
 
 ---
 
-## Existing Historical Data
+### Existing Historical Data
 
 Existing requisition records must **not** be automatically migrated or reinterpreted because historical data may have been entered using the previous convention.
 
@@ -449,11 +449,11 @@ This is intentional to preserve historical data integrity.
 
 ---
 
-# Status Updates
+## Status Updates
 
 Status Updates provide a chronological record of purchasing/progress activity.
 
-## Permissions
+### Permissions
 
 Purchase Members can create status updates.
 
@@ -473,7 +473,7 @@ There is currently no separate edit/delete workflow that should be introduced wi
 
 ---
 
-# Queries
+## Queries
 
 Queries allow users involved in a requisition to request clarification or communicate about the request.
 
@@ -488,7 +488,7 @@ For continuation requisitions:
 
 ---
 
-# Attachments
+## Attachments
 
 Requisitions can contain file attachments.
 
@@ -508,11 +508,11 @@ New attachments created after continuation belong to the child requisition.
 
 ---
 
-# Printing and Export
+## Printing and Export
 
 ReqFlow supports both individual and batch requisition printing/export.
 
-## Individual Purchase Requisition
+### Individual Purchase Requisition
 
 The existing Purchase Member print endpoint provides the requisition's purchasing information in CSV format.
 
@@ -522,7 +522,7 @@ The existing endpoint should be reused rather than duplicating its authorization
 
 ---
 
-## Batch Requisition Print
+### Batch Requisition Print
 
 Purchase Members have a dedicated:
 
@@ -548,7 +548,7 @@ The normal Purchase Member requisition list should not receive a global `assigne
 
 ---
 
-# Partial Close / Continuation Requisitions
+## Partial Close / Continuation Requisitions
 
 Partial Close solves the situation where most items in a requisition have been fulfilled but one or two items remain unavailable.
 
@@ -556,7 +556,7 @@ Instead of keeping the entire requisition open for months, the fulfilled items c
 
 ---
 
-## Purpose
+### Purpose
 
 Example:
 
@@ -585,7 +585,7 @@ This allows the completed portion to be printed/documented and signed while the 
 
 ---
 
-# Partial Close Permission
+## Partial Close Permission
 
 Only:
 
@@ -599,7 +599,7 @@ The frontend should show the action only to authorized users, but backend author
 
 ---
 
-# Partial Close UI
+## Partial Close UI
 
 For eligible requisitions, the Purchase Head can see:
 
@@ -615,7 +615,7 @@ and requires a new approval/closure note for the completed parent portion.
 
 ---
 
-# Parent Requisition
+## Parent Requisition
 
 Suppose the original requisition is:
 
@@ -641,7 +641,7 @@ The parent remains the historical record of the completed portion.
 
 ---
 
-# Child Continuation Requisition
+## Child Continuation Requisition
 
 The remaining items become a child requisition.
 
@@ -674,7 +674,7 @@ The workflow is therefore not restarted from `draft`.
 
 ---
 
-# Continuation Reference Numbers
+## Continuation Reference Numbers
 
 The first continuation uses:
 
@@ -688,7 +688,7 @@ The parent reference itself remains unchanged.
 
 ---
 
-# Parent / Child Relationship
+## Parent / Child Relationship
 
 The parent and child are both stored in the normal:
 
@@ -730,7 +730,7 @@ requisition_partial_relation_items
 
 ---
 
-# Relation Table
+## Relation Table
 
 The relationship table represents the parent/child continuation.
 
@@ -749,7 +749,7 @@ The relation type identifies the relationship as a partial/continuation relation
 
 ---
 
-# Item Mapping
+## Item Mapping
 
 The item mapping table associates parent items with child items.
 
@@ -765,7 +765,7 @@ This allows the system to preserve the relationship between the original item an
 
 ---
 
-# Inherited History
+## Inherited History
 
 Historical information is inherited logically rather than duplicated.
 
@@ -805,7 +805,7 @@ New activity created after continuation belongs to the child.
 
 ---
 
-# Approval Context
+## Approval Context
 
 Partial Close does not create a new approval note.
 
@@ -817,7 +817,7 @@ The parent's original approval information remains unchanged.
 
 ---
 
-# Requester
+## Requester
 
 The original requester must remain the requester.
 
@@ -834,7 +834,7 @@ The continuation relationship should be communicated separately from the request
 
 ---
 
-# Continuation Navigation
+## Continuation Navigation
 
 The parent can display:
 
@@ -852,7 +852,7 @@ The displayed reference is human-readable, but the actual frontend navigation mu
 
 ---
 
-# Historical Integrity
+## Historical Integrity
 
 Once a parent is completed through Partial Close, it should effectively behave as a historical/frozen record.
 
@@ -879,7 +879,7 @@ Conceptually:
 
 ---
 
-# Transaction Safety
+## Transaction Safety
 
 Partial Close is an atomic backend operation.
 
@@ -913,7 +913,7 @@ If an operation fails, the transaction should roll back rather than leaving an i
 
 ---
 
-# API Architecture
+## API Architecture
 
 Backend code is located under:
 
@@ -952,7 +952,7 @@ The backend is responsible for:
 
 ---
 
-# OpenAPI
+## OpenAPI
 
 The API specification is located at:
 
@@ -974,7 +974,7 @@ lib/api-zod/src/generated/
 
 ---
 
-## OpenAPI Development Rule
+### OpenAPI Development Rule
 
 When changing an API:
 
@@ -1000,7 +1000,7 @@ lib/api-spec/openapi.yaml
 
 ---
 
-# Database
+## Database
 
 ReqFlow uses:
 
@@ -1142,7 +1142,7 @@ Avoid rewriting unrelated working code while implementing a small feature.
 
 ---
 
-# Validation
+## Validation
 
 Before committing a significant change, perform appropriate validation.
 
@@ -1531,9 +1531,9 @@ Do not submit the same approval action repeatedly simply because the UI has not 
 
 ---
 
-# Development Principles
+## Development Principles
 
-## 1. Make Small Changes
+### 1. Make Small Changes
 
 ReqFlow is an existing production application.
 
@@ -1547,7 +1547,7 @@ Avoid unnecessary rewrites.
 
 ---
 
-## 2. Preserve Existing Behavior
+### 2. Preserve Existing Behavior
 
 Before changing a shared component or route, understand how it is currently used.
 
@@ -1555,7 +1555,7 @@ A change that fixes one page but breaks another is not an acceptable feature imp
 
 ---
 
-## 3. Backend Authorization Is Mandatory
+### 3. Backend Authorization Is Mandatory
 
 Frontend checks such as:
 
@@ -1571,7 +1571,7 @@ The backend must independently verify permissions.
 
 ---
 
-## 4. Preserve Historical Data
+### 4. Preserve Historical Data
 
 Historical requisitions are important records.
 
@@ -1586,7 +1586,7 @@ Existing records → unchanged
 
 ---
 
-## 5. Avoid Unnecessary Duplication
+### 5. Avoid Unnecessary Duplication
 
 For continuation requisitions, inherited information should normally be resolved through the parent/child relationship.
 
@@ -1601,7 +1601,7 @@ unless there is a specific reason.
 
 ---
 
-## 6. Parent Requisitions Are Historical Records
+### 6. Parent Requisitions Are Historical Records
 
 After Partial Close:
 
@@ -1614,7 +1614,7 @@ Later child activity should not silently modify the parent's historical state.
 
 ---
 
-## 7. OpenAPI Is the API Source of Truth
+### 7. OpenAPI Is the API Source of Truth
 
 When changing an API:
 
@@ -1630,7 +1630,7 @@ Do not manually patch generated API files.
 
 ---
 
-## 8. Production Safety
+### 8. Production Safety
 
 The development laptop, GitHub, and ServerPC are separate environments.
 
@@ -1638,7 +1638,7 @@ A successful local test does not automatically mean a change should be deployed 
 
 ---
 
-# Architecture Overview
+## Architecture Overview
 
 The high-level architecture is:
 
@@ -1694,7 +1694,7 @@ The high-level architecture is:
 
 ---
 
-# Partial Close Architecture
+## Partial Close Architecture
 
 The continuation system can be represented as:
 
@@ -1723,7 +1723,7 @@ The continuation system can be represented as:
 
 ---
 
-# Data Ownership in Continuations
+## Data Ownership in Continuations
 
 A useful mental model is:
 
@@ -1753,7 +1753,7 @@ New activity belongs to the continuation.
 
 ---
 
-# Current Git Backup
+## Current Git Backup
 
 A backup branch was created during recent feature development:
 
@@ -1773,7 +1773,7 @@ before relying on them for rollback.
 
 ---
 
-# Useful Git Commands
+## Useful Git Commands
 
 Check current state:
 
@@ -1820,7 +1820,7 @@ git push origin backup-before-change
 
 ---
 
-# Useful Database Commands
+## Useful Database Commands
 
 Connect to local PostgreSQL:
 
@@ -1844,7 +1844,7 @@ Always confirm that the database is the intended development database before run
 
 ---
 
-# Future Documentation
+## Future Documentation
 
 This README is intended to explain the current architecture and important development rules.
 
@@ -1865,7 +1865,7 @@ the relevant section of this README should be updated.
 
 ---
 
-# Final Principle
+## Final Principle
 
 ReqFlow is not simply a CRUD application.
 

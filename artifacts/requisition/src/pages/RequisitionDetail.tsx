@@ -88,6 +88,7 @@ export default function RequisitionDetail() {
   const [adminEditOpen, setAdminEditOpen] = useState(false);
   const [adminPurpose, setAdminPurpose] = useState("");
   const [adminApproverId, setAdminApproverId] = useState("");
+  const [localPurchaseTagUpdating, setLocalPurchaseTagUpdating] = useState(false);
   const [priorityOpen, setPriorityOpen] = useState(false);
   const [newPriority, setNewPriority] = useState("");
   const [approvalNoteOpen, setApprovalNoteOpen] = useState(false);
@@ -127,6 +128,31 @@ export default function RequisitionDetail() {
     queryClient.invalidateQueries({ queryKey: getGetRequisitionQueryKey(id) });
     queryClient.invalidateQueries({ queryKey: getListRequisitionsQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetAnalyticsSummaryQueryKey() });
+    queryClient.invalidateQueries({ queryKey: ["/api/analytics/purchase-member-performance"] });
+  };
+
+  const toggleLocalPurchaseTag = async () => {
+    const currentlyTagged = (req as (RequisitionDetailType & { local_purchase_tagged?: boolean }) | undefined)?.local_purchase_tagged === true;
+    setLocalPurchaseTagUpdating(true);
+    try {
+      const response = await fetch(`/api/requisitions/${id}/local-purchase-tag`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tagged: !currentlyTagged }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not update local purchase tag.");
+      invalidate();
+      toast({ title: currentlyTagged ? "Local purchase tag removed" : "Marked as local purchase" });
+    } catch (error) {
+      toast({
+        title: "Tag update failed",
+        description: error instanceof Error ? error.message : "Could not update local purchase tag.",
+        variant: "destructive",
+      });
+    } finally {
+      setLocalPurchaseTagUpdating(false);
+    }
   };
 
   const changePriority = async () => {
@@ -247,6 +273,8 @@ export default function RequisitionDetail() {
   const canEdit = (isPurchaseHead || isParty) && ["draft", "pending_checkers", "pending_approver", "on_hold"].includes(req.status);
   const canComplete = isPurchaseHead && req.status === "in_progress";
   const canPartialClose = isPurchaseHead && req.status === "in_progress";
+  const hasPreparedCompletion = req.status === "completed" && !!req.completed_at &&
+    req.status_updates?.some((update) => !update.inherited && update.stage === "prepared") === true;
   const remainingItemCount = (req.items?.length ?? 0) - fulfilledItemIds.length;
 
   function toggleFulfilledItem(itemId: number, checked: boolean) {
@@ -401,15 +429,18 @@ export default function RequisitionDetail() {
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-5">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-start gap-3">
+      <div className="flex flex-col gap-4 border-b pb-4">
+        <div className="flex min-w-0 items-start gap-3">
           <Link href="/requisitions" className="mt-1 p-2 rounded-md hover:bg-accent text-muted-foreground">
             <ArrowLeft className="w-4 h-4" />
           </Link>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold font-mono">{req.ref_number}</h1>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="break-words text-xl font-bold font-mono">{req.ref_number}</h1>
               <StatusBadge status={req.status} />
+              {(req as RequisitionDetailType & { local_purchase_tagged?: boolean }).local_purchase_tagged && (
+                <Badge variant="outline">Local purchase</Badge>
+              )}
               {(req.queries?.filter(query => !query.is_resolved).length ?? 0) > 0 && (
                 <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700" data-testid="badge-open-queries">
                   {req.queries!.filter(query => !query.is_resolved).length} open quer{req.queries!.filter(query => !query.is_resolved).length === 1 ? "y" : "ies"}
@@ -422,7 +453,7 @@ export default function RequisitionDetail() {
             {req.continuation && req.continuation_requisition_id && <p className="text-xs text-emerald-700 mt-1">CONTINUATION: <Link href={`/requisitions/${req.continuation_requisition_id}`} className="font-medium underline">{req.continuation}</Link></p>}
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex flex-wrap items-center gap-2">
           {canEdit && (
             <Dialog open={editOpen} onOpenChange={setEditOpen}>
               <DialogTrigger asChild>
@@ -852,7 +883,7 @@ export default function RequisitionDetail() {
           {canComplete && (
             <Dialog open={completeOpen} onOpenChange={setCompleteOpen}>
               <DialogTrigger asChild>
-                <Button size="sm" variant="outline" className="gap-1.5" data-testid="button-complete">
+                <Button size="sm" className="gap-1.5" data-testid="button-complete">
                   <FileCheck className="w-3.5 h-3.5" />Close Requisition
                 </Button>
               </DialogTrigger>
@@ -910,6 +941,20 @@ export default function RequisitionDetail() {
                 </div>
               </DialogContent>
             </Dialog>
+          )}
+          {isPurchaseHead && (
+            <div className="hidden h-8 w-px bg-border sm:block" aria-hidden="true" />
+          )}
+          {isPurchaseHead && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={localPurchaseTagUpdating}
+              onClick={toggleLocalPurchaseTag}
+              data-testid="button-toggle-local-purchase-tag"
+            >
+              {localPurchaseTagUpdating ? "Saving..." : (req as RequisitionDetailType & { local_purchase_tagged?: boolean }).local_purchase_tagged ? "Remove tag" : "Mark local purchase"}
+            </Button>
           )}
           {isPurchaseHead && (
             <Dialog open={adminEditOpen} onOpenChange={(open) => {
@@ -1105,9 +1150,10 @@ export default function RequisitionDetail() {
             { label: "Approver", name: req.approver_name, status: req.approver_status, time: req.approver_reviewed_at, note: req.approver_suggestion },
             { label: "Purchase Head", name: req.purchase_head_name, status: req.purchase_head_name ? "assigned" : null, time: req.assigned_at, note: null },
             { label: "Assigned To", name: req.assigned_to_name, status: req.assigned_to_name ? "in_progress" : null, time: req.assigned_at, note: null },
+            { label: "Completed (Prepared)", name: hasPreparedCompletion ? req.assigned_to_name : null, status: hasPreparedCompletion ? "completed" : null, time: hasPreparedCompletion ? req.completed_at : null, note: null },
           ].map((step, i) => (
             <div key={i} className="flex gap-3 items-start">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold ${step.status === "approved" || step.status === "submitted" || step.status === "assigned" || step.status === "in_progress" ? "bg-emerald-100 text-emerald-700" : step.status === "rejected" ? "bg-red-100 text-red-700" : step.name ? "bg-amber-100 text-amber-700" : "bg-muted text-muted-foreground"}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold ${step.status === "approved" || step.status === "submitted" || step.status === "assigned" || step.status === "in_progress" || step.status === "completed" ? "bg-emerald-100 text-emerald-700" : step.status === "rejected" ? "bg-red-100 text-red-700" : step.name ? "bg-amber-100 text-amber-700" : "bg-muted text-muted-foreground"}`}>
                 {i + 1}
               </div>
               <div className="flex-1 min-w-0">

@@ -21,10 +21,12 @@ pieces for you automatically. That's by far the easiest path.
    all set up already in this project's `.replit-artifact` config files).
 4. Click **Run**. Replit installs everything and starts both services.
 5. Before first use, run the database setup once from Replit's shell:
+
+   ```powershell
+      pnpm --filter @workspace/db run push
    ```
-   pnpm --filter @workspace/db run push
-   ```
-   This creates all the tables (including the new `holidays` table).
+  
+This creates all the tables (including the new `holidays` table).
 
 That's it — Replit gives you a live web address you (and your team) can open
 in any browser, on any device, no installation needed on their end either.
@@ -51,13 +53,15 @@ If you'd rather host it elsewhere (or hand this to a developer), you'll need:
    service (no need to manually start it each time, unlike Docker).
 4. Set your connection string **persistently** (so you don't have to retype
    it in every new terminal):
+
    ```powershell
    setx DATABASE_URL "postgres://postgres:YOUR_PASSWORD@localhost:5432/postgres"
    ```
+
    Replace `YOUR_PASSWORD` with what you set in step 2. **Close and reopen
    PowerShell** afterward — `setx` only affects new terminal windows, not
    the one you ran it in.
-   
+
    *(If your password contains symbols like `@`, `#`, `%`, or `/`, and you
    get a connection error later, that's why — those need URL-encoding. Tell
    me the symbol and I'll give you the encoded version.)*
@@ -113,6 +117,7 @@ the seed step.
 
 **Before the "proper launch" (remote access) phase**, a few things here
 need upgrading from their current pilot-appropriate defaults:
+
 - **Sessions are stored in memory** on the server — fine for one shared
   local machine, but everyone gets logged out if the server restarts, and
   it won't work at all across multiple server instances. Needs a real
@@ -154,9 +159,11 @@ project declares the ones it needs in `pnpm-workspace.yaml` under
 `onlyBuiltDependencies` — if you ever see that name again in an older
 backup of this file, it's stale and won't do anything on pnpm v11). If you
 still see this warning (e.g. a brand-new dependency was added later), run:
+
 ```powershell
 pnpm approve-builds --all
 ```
+
 then `pnpm install` again. This should only be needed once per new
 dependency that runs install scripts, not on every install.
 
