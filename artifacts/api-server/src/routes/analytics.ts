@@ -51,7 +51,7 @@ router.get("/analytics/summary", async (_req, res) => {
 
   const resolutionRow = await db
     .select({
-      avg: sql<number>`AVG(EXTRACT(EPOCH FROM (${requisitionsTable.approver_reviewed_at} - ${requisitionsTable.created_at}))/86400)::float`,
+      avg: sql<number>`AVG(EXTRACT(EPOCH FROM (${requisitionsTable.approver_reviewed_at} - ${requisitionsTable.submitted_at}))/86400)::float`,
     })
     .from(requisitionsTable)
     .where(isNotNull(requisitionsTable.approver_reviewed_at));
@@ -102,7 +102,7 @@ router.get("/analytics/resolution-times", async (_req, res) => {
       completed_at: requisitionsTable.completed_at,
       resolution_days: sql<
         number | null
-      >`CASE WHEN ${requisitionsTable.approver_reviewed_at} IS NOT NULL THEN (EXTRACT(EPOCH FROM (${requisitionsTable.approver_reviewed_at} - ${requisitionsTable.created_at}))/86400)::float ELSE NULL END`,
+      >`CASE WHEN ${requisitionsTable.approver_reviewed_at} IS NOT NULL AND ${requisitionsTable.submitted_at} IS NOT NULL THEN (EXTRACT(EPOCH FROM (${requisitionsTable.approver_reviewed_at} - ${requisitionsTable.submitted_at}))/86400)::float ELSE NULL END`,
     })
     .from(requisitionsTable)
     .orderBy(sql`${requisitionsTable.created_at} DESC`)
@@ -131,7 +131,7 @@ router.get("/analytics/urgent", async (_req, res) => {
       approved_at: requisitionsTable.approver_reviewed_at,
       resolution_days: sql<
         number | null
-      >`CASE WHEN ${requisitionsTable.approver_reviewed_at} IS NOT NULL THEN (EXTRACT(EPOCH FROM (${requisitionsTable.approver_reviewed_at} - ${requisitionsTable.created_at}))/86400)::float ELSE NULL END`,
+      >`CASE WHEN ${requisitionsTable.approver_reviewed_at} IS NOT NULL AND ${requisitionsTable.submitted_at} IS NOT NULL THEN (EXTRACT(EPOCH FROM (${requisitionsTable.approver_reviewed_at} - ${requisitionsTable.submitted_at}))/86400)::float ELSE NULL END`,
     })
     .from(requisitionsTable)
     .where(eq(requisitionsTable.priority, "urgent"))
