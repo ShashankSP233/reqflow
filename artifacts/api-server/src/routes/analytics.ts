@@ -51,10 +51,10 @@ router.get("/analytics/summary", async (_req, res) => {
 
   const resolutionRow = await db
     .select({
-      avg: sql<number>`AVG(EXTRACT(EPOCH FROM (approved_at - created_at))/86400)::float`,
+      avg: sql<number>`AVG(EXTRACT(EPOCH FROM (${requisitionsTable.approver_reviewed_at} - ${requisitionsTable.created_at}))/86400)::float`,
     })
     .from(requisitionsTable)
-    .where(sql`approved_at IS NOT NULL`);
+    .where(isNotNull(requisitionsTable.approver_reviewed_at));
 
   const totalCostRow = await db
     .select({
@@ -98,11 +98,11 @@ router.get("/analytics/resolution-times", async (_req, res) => {
       status: requisitionsTable.status,
       site_name: requisitionsTable.site_name,
       created_at: requisitionsTable.created_at,
-      approved_at: requisitionsTable.approved_at,
+      approved_at: requisitionsTable.approver_reviewed_at,
       completed_at: requisitionsTable.completed_at,
       resolution_days: sql<
         number | null
-      >`CASE WHEN ${requisitionsTable.approved_at} IS NOT NULL THEN (EXTRACT(EPOCH FROM (${requisitionsTable.approved_at} - ${requisitionsTable.created_at}))/86400)::float ELSE NULL END`,
+      >`CASE WHEN ${requisitionsTable.approver_reviewed_at} IS NOT NULL THEN (EXTRACT(EPOCH FROM (${requisitionsTable.approver_reviewed_at} - ${requisitionsTable.created_at}))/86400)::float ELSE NULL END`,
     })
     .from(requisitionsTable)
     .orderBy(sql`${requisitionsTable.created_at} DESC`)
@@ -128,10 +128,10 @@ router.get("/analytics/urgent", async (_req, res) => {
       status: requisitionsTable.status,
       site_name: requisitionsTable.site_name,
       created_at: requisitionsTable.created_at,
-      approved_at: requisitionsTable.approved_at,
+      approved_at: requisitionsTable.approver_reviewed_at,
       resolution_days: sql<
         number | null
-      >`CASE WHEN ${requisitionsTable.approved_at} IS NOT NULL THEN (EXTRACT(EPOCH FROM (${requisitionsTable.approved_at} - ${requisitionsTable.created_at}))/86400)::float ELSE NULL END`,
+      >`CASE WHEN ${requisitionsTable.approver_reviewed_at} IS NOT NULL THEN (EXTRACT(EPOCH FROM (${requisitionsTable.approver_reviewed_at} - ${requisitionsTable.created_at}))/86400)::float ELSE NULL END`,
     })
     .from(requisitionsTable)
     .where(eq(requisitionsTable.priority, "urgent"))
@@ -232,13 +232,13 @@ router.get("/analytics/status-updates", async (_req, res) => {
   // update submitted by the purchase member.
   const purchaseHandoffRows = await db
     .select({
-      approved_at: requisitionsTable.approved_at,
+      approved_at: requisitionsTable.approver_reviewed_at,
       assigned_at: requisitionsTable.assigned_at,
     })
     .from(requisitionsTable)
     .where(
       and(
-        isNotNull(requisitionsTable.approved_at),
+        isNotNull(requisitionsTable.approver_reviewed_at),
         isNotNull(requisitionsTable.assigned_at),
       ),
     );

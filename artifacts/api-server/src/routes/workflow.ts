@@ -160,14 +160,15 @@ router.post("/requisitions/:id/approve", async (req, res) => {
   const existing = await requireApprover(req, res, id);
   if (!existing) return;
   const { suggestion, approver_name } = req.body;
+  const approvalTimestamp = new Date();
   const [updated] = await db.update(requisitionsTable)
     .set({
       status: "approved",
       approver_suggestion: suggestion ?? null,
-      approver_reviewed_at: new Date(),
+      approver_reviewed_at: approvalTimestamp,
       approver_status: "approved",
       approver_name: approver_name ?? undefined,
-      approved_at: new Date(),
+      approved_at: approvalTimestamp,
       hold_reason: null,
       held_at: null,
       updated_at: new Date(),
