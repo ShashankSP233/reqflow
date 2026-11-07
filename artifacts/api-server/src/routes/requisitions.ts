@@ -44,6 +44,10 @@ function personalInvolvementCondition(userId: number) {
   );
 }
 
+function assignedToCurrentUserCondition(userId: number) {
+  return eq(requisitionsTable.assigned_to_id, userId);
+}
+
 function isPersonallyInvolved(userId: number, r: { raised_by_id: number | null; checker1_id: number | null; checker2_id: number | null; approver_id: number | null; assigned_to_id: number | null }): boolean {
   return r.raised_by_id === userId || r.checker1_id === userId || r.checker2_id === userId || r.approver_id === userId || r.assigned_to_id === userId;
 }
@@ -263,7 +267,7 @@ router.get("/requisitions", async (req, res) => {
         conditions.push(sql`FALSE`);
       } else {
         conditions.push(and(
-          eq(requisitionsTable.assigned_to_id, req.currentUser.id),
+          assignedToCurrentUserCondition(req.currentUser.id),
           eq(requisitionsTable.status, "in_progress"),
           sql`NOT EXISTS (
             WITH RECURSIVE ancestors(id) AS (
@@ -305,7 +309,10 @@ router.get("/requisitions", async (req, res) => {
         eq(requisitionsTable.approver_id, userId),
       ));
     } else if (req.currentUser.role === "purchase_member") {
-      conditions.push(and(eq(requisitionsTable.status, "in_progress"), eq(requisitionsTable.assigned_to_id, userId)));
+      conditions.push(and(
+        eq(requisitionsTable.status, "in_progress"),
+        assignedToCurrentUserCondition(userId),
+      ));
     } else if (req.currentUser.role === "site_user") {
       conditions.push(and(eq(requisitionsTable.status, "draft"), eq(requisitionsTable.raised_by_id, userId)));
     } else if (req.currentUser.role === "purchase_head") {
