@@ -336,8 +336,9 @@ router.get("/analytics/purchase-member-performance", async (_req, res) => {
       sql`${isNotNull(requisitionsTable.assigned_to_name)} AND ${inArray(requisitionsTable.status, ["assigned", "in_progress", "completed"])}`,
     );
 
-  // The latest event per requisition is its current tag state. Tag history
-  // changes only the duration average, never the member counts.
+  // Local-purchase requisitions still count toward the member's workload and
+  // completion percentage, but they are excluded from the average completion
+  // time calculation so they can't skew the duration metric.
   const tagEvents = await db
     .select({
       requisition_id: localPurchaseTagEventsTable.requisition_id,
@@ -350,8 +351,9 @@ router.get("/analytics/purchase-member-performance", async (_req, res) => {
   for (const event of tagEvents) {
     if (seenTagIds.has(event.requisition_id)) continue;
     seenTagIds.add(event.requisition_id);
-    if (event.action === "tagged")
+    if (event.action === "tagged") {
       localPurchaseTaggedIds.add(event.requisition_id);
+    }
   }
 
   type Entry = {
